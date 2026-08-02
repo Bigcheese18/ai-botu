@@ -16,9 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "mcp"))
 from mcp_server import TiaWorker  # noqa: E402  复用 serve 通信(含自动 Attach)
+from ai_agent import ChatAgent    # noqa: E402  AI 聊天代理(工具调用)
 
 ROOT = Path(__file__).parent.parent          # 仓库根
 WORKER = TiaWorker()
+AGENT = ChatAgent(WORKER)
 LOG_TAIL = []          # 最近日志行(worker 侧 stderr 由 TiaWorker 丢弃,这里只记前端操作)
 LOG_LOCK = threading.Lock()
 OUT_DIR = str(ROOT / "output")
@@ -29,6 +31,14 @@ def log(msg: str):
     with LOG_LOCK:
         LOG_TAIL.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
         del LOG_TAIL[:-200]
+
+
+def _decode_body(raw: bytes) -> str:
+    """请求体解码:浏览器 fetch 发 UTF-8;Windows 终端 curl 可能发 GBK,兼容两者。"""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("gbk", "replace")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -109,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/save-scl":
             try:
                 length = int(self.headers.get("Content-Length", 0))
-                req = json.loads(self.rfile.read(length).decode("utf-8"))
+                req = json.loads(_decode_body(self.rfile.read(length)))
                 name = req.get("name", "SCL_Import")
                 code = req.get("code", "")
                 out_dir = Path(OUT_DIR) / "scl"
@@ -120,12 +130,31 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as ex:
                 self._send(400, json.dumps({"ok": False, "error": str(ex)}, ensure_ascii=False).encode("utf-8"))
             return
+        if self.path == "/api/chat":
+            # AI 聊天:LLM 自主决定调用哪些工具操作博途
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(_decode_body(self.rfile.read(length)))
+                if req.get("action") == "clear":
+                    AGENT.clear()
+                    self._send(200, json.dumps({"ok": True, "reply": "已清空对话", "steps": []}, ensure_ascii=False).encode("utf-8"))
+                    return
+                message = (req.get("message") or "").strip()
+                if not message:
+                    raise ValueError("message 为空")
+                log(f"🤖 AI 提问: {message[:80]}")
+                result = AGENT.chat(message)
+                log(f"🤖 AI 完成(工具调用 {len(result['steps'])} 步)")
+                self._send(200, json.dumps({"ok": True, **result}, ensure_ascii=False).encode("utf-8"))
+            except Exception as ex:
+                self._send(200, json.dumps({"ok": False, "error": str(ex)}, ensure_ascii=False).encode("utf-8"))
+            return
         if self.path != "/api/cmd":
             self._send(404, b'{"error":"not found"}')
             return
         try:
             length = int(self.headers.get("Content-Length", 0))
-            req = json.loads(self.rfile.read(length).decode("utf-8"))
+            req = json.loads(_decode_body(self.rfile.read(length)))
             cmd = req.get("cmd", "")
             args = req.get("args", {}) or {}
         except Exception as ex:

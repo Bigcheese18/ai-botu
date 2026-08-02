@@ -64,10 +64,33 @@
     padding:10px; font:12px Consolas,monospace; max-height:220px; overflow:auto; white-space:pre-wrap;
     backdrop-filter:blur(8px);
   }
+  /* AI 聊天 */
+  #chatLog {
+    height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;
+    background:rgba(0,0,0,.22); border:1px solid rgba(255,255,255,.09); border-radius:12px;
+    padding:10px; margin-bottom:10px;
+  }
+  .msg { max-width:86%; padding:8px 12px; border-radius:12px; font-size:13px; white-space:pre-wrap; word-break:break-word; line-height:1.55; }
+  .msg.user { align-self:flex-end; background:linear-gradient(135deg, rgba(59,130,246,.75), rgba(99,102,241,.75)); }
+  .msg.ai { align-self:flex-start; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); }
+  .step { align-self:stretch; font:11px/1.5 Consolas,monospace; background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.06); border-radius:8px; padding:4px 10px; color:var(--dim); }
+  .step.ok { border-left:3px solid var(--ok); }
+  .step.fail { border-left:3px solid var(--err); }
 </style>
 </head>
 <body>
 <h1>⚙ TIA Portal 控制台 <span id="statusBar" class="status st-off">未连接</span></h1>
+
+<!-- AI 助手 -->
+<div class="panel" style="margin-bottom:14px">
+  <h2>🤖 AI 助手 <span style="color:var(--dim);font-weight:normal">用自然语言控制博途</span></h2>
+  <div id="chatLog"></div>
+  <div class="row" style="margin-bottom:0">
+    <input id="chatInput" placeholder="例:给我建一个电机启停自锁的梯形图块,再加 3 个中文变量" style="width:auto;flex:1">
+    <button class="primary" onclick="sendChat()">发送</button>
+    <button class="btn-mini" onclick="clearChat()">清空对话</button>
+  </div>
+</div>
 
 <div class="grid">
   <!-- 工程 -->
@@ -160,6 +183,58 @@ async function addTags() {
 async function connectProject() {
   await cmd('connect', {});
 }
+
+// ---------- AI 聊天 ----------
+function appendMsg(role, html) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.innerHTML = html;
+  document.getElementById('chatLog').appendChild(d);
+  document.getElementById('chatLog').scrollTop = document.getElementById('chatLog').scrollHeight;
+  return d;
+}
+function appendStep(s) {
+  const d = document.createElement('div');
+  d.className = 'step ' + (s.ok ? 'ok' : 'fail');
+  const args = JSON.stringify(s.args || {});
+  d.textContent = (s.ok ? '✓ ' : '✗ ') + s.tool + ' ' + (args.length > 90 ? args.slice(0, 90) + '…' : args);
+  d.title = JSON.stringify(s.result, null, 2).slice(0, 2000);
+  document.getElementById('chatLog').appendChild(d);
+  document.getElementById('chatLog').scrollTop = document.getElementById('chatLog').scrollHeight;
+  return d;
+}
+async function sendChat() {
+  const text = val('chatInput');
+  if (!text) return;
+  setVal('chatInput', '');
+  appendMsg('user', escapeHtml(text));
+  const aiEl = appendMsg('ai', '<span class="warn">AI 思考中…</span>');
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    const d = await r.json();
+    aiEl.innerHTML = '';
+    if (!d.ok) {
+      aiEl.innerHTML = '<span class="err">' + escapeHtml(d.error || '') + '</span>';
+      return;
+    }
+    (d.steps || []).forEach(appendStep);
+    aiEl.textContent = d.reply || '(无回复)';
+  } catch(e) {
+    aiEl.innerHTML = '<span class="err">请求失败: ' + e + '</span>';
+  }
+  document.getElementById('chatLog').scrollTop = document.getElementById('chatLog').scrollHeight;
+}
+async function clearChat() {
+  try {
+    await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'clear'})});
+  } catch(e) {}
+  document.getElementById('chatLog').innerHTML = '';
+}
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
 
 async function refreshStatus() {
   try {
