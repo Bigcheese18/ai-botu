@@ -44,6 +44,12 @@ VAR
     b回零触发 : Bool;           // 回零命令上升沿(按钮C/MCD)
     r大盘给定 : Real;           // 大盘实际给定(rpm,虚拟模式取 MCD)
     r小盘给定 : Real;           // 小盘实际给定(rpm,虚拟模式取 MCD)
+    b优化上次 : Bool;           // 按钮上次状态(上升沿检测,HMI 自复位按钮)
+    b按钮B上次 : Bool;
+    b按钮C上次 : Bool;
+    b按钮D上次 : Bool;
+    b按钮E上次 : Bool;
+    b按钮F上次 : Bool;
 END_VAR
 
 BEGIN
@@ -55,38 +61,44 @@ BEGIN
         b使能保持 := TRUE;
     END_IF;
 
-    // 优化:运行前执行,两轴各转60度
-    IF b优化命令 THEN
+    // 优化:运行前执行,两轴各转60度(上升沿触发)
+    IF b优化命令 AND NOT b优化上次 THEN
         b优化中 := TRUE;
         b优化完成大 := FALSE;
         b优化完成小 := FALSE;
     END_IF;
+    b优化上次 := b优化命令;
 
-    // 按钮B:小盘定位请求(60度),到位后清除
-    IF b按钮B AND NOT b优化中 AND NOT b同步使能 THEN
+    // 按钮B:小盘定位请求(60度),到位后清除(上升沿触发)
+    IF b按钮B AND NOT b按钮B上次 AND NOT b优化中 AND NOT b同步使能 THEN
         b定位请求小 := TRUE;
     END_IF;
+    b按钮B上次 := b按钮B;
 
-    // 按钮D:进入同步模式(小盘跟随大盘)
-    IF b按钮D AND NOT b优化中 THEN
+    // 按钮D:进入同步模式(小盘跟随大盘)(上升沿触发)
+    IF b按钮D AND NOT b按钮D上次 AND NOT b优化中 THEN
         b同步使能 := TRUE;
     END_IF;
+    b按钮D上次 := b按钮D;
 
-    // 按钮E:解除同步
-    IF b按钮E THEN
+    // 按钮E:解除同步(上升沿触发)
+    IF b按钮E AND NOT b按钮E上次 THEN
         b同步使能 := FALSE;
     END_IF;
+    b按钮E上次 := b按钮E;
 
-    // 按钮F:软限位使能切换(电平反转需上升沿,此处简化为按下切换)
-    IF b按钮F THEN
+    // 按钮F:软限位使能切换(上升沿触发,按一次切换一次)
+    IF b按钮F AND NOT b按钮F上次 THEN
         b软限位使能 := NOT b软限位使能;
     END_IF;
+    b按钮F上次 := b按钮F;
 
-    // 按钮C / MCD:回零触发
-    IF b按钮C OR bMCD回零 THEN
+    // 按钮C / MCD:回零触发(上升沿触发)
+    IF (b按钮C OR bMCD回零) AND NOT b按钮C上次 THEN
         b回零触发 := TRUE;
         b同步使能 := FALSE;
     END_IF;
+    b按钮C上次 := b按钮C OR bMCD回零;
 
     // 速度给定:虚拟调试模式用 MCD 给定,否则用 HMI 设定
     IF b虚拟模式 THEN

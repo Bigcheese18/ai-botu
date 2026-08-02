@@ -12,8 +12,9 @@ namespace TiaOpennessWorker
         public string Text = "";
         public int Left, Top, Width = 120, Height = 40;
         public string Tag = "";             // HMI 变量名(ProcessValue 动态绑定)
-        public string ActionKind = "";      // SetBit/ResetBit(按钮事件)
+        public string ActionKind = "";      // SetBit/ResetBit(Click 事件)
         public string ActionTag = "";       // 事件目标 HMI 变量
+        public string ActionKindRelease = ""; // 释放事件动作(ResetBit,自复位按钮用)
     }
 
     /// <summary>HMI 变量表条目(连接 + PLC 符号地址)。</summary>
@@ -178,19 +179,23 @@ namespace TiaOpennessWorker
                 sb.Append("              </Hmi.Screen.Property>\n");
             }
 
-            // 事件动作(按钮点击置位/复位)
-            if (!string.IsNullOrEmpty(item.ActionKind) && !string.IsNullOrEmpty(item.ActionTag))
+            // 事件动作(Click 置位/复位;ActionKindRelease 生成 Release 事件实现自复位按钮)
+            var events = new[] { new[] { "Click", item.ActionKind }, new[] { "Release", item.ActionKindRelease } };
+            foreach (var ev in events)
             {
+                var evName = ev[0];
+                var evKind = ev[1];
+                if (string.IsNullOrEmpty(evKind) || string.IsNullOrEmpty(item.ActionTag)) continue;
                 sb.Append($"              <Hmi.Event.Event ID=\"{id++}\" CompositionName=\"Events\">\n");
                 sb.Append("                <AttributeList>\n");
-                sb.Append("                  <Name>Click</Name>\n");
+                sb.Append($"                  <Name>{evName}</Name>\n");
                 sb.Append("                </AttributeList>\n");
                 sb.Append("                <ObjectList>\n");
                 sb.Append($"                  <Hmi.Event.FunctionListEventHandler ID=\"{id++}\" CompositionName=\"EventHandler\">\n");
                 sb.Append("                    <ObjectList>\n");
                 sb.Append($"                      <Hmi.Event.FunctionListEntry ID=\"{id++}\" CompositionName=\"FunctionListEntries\">\n");
                 sb.Append("                        <AttributeList>\n");
-                sb.Append($"                          <Name>{XmlEsc(item.ActionKind)}</Name>\n");
+                sb.Append($"                          <Name>{XmlEsc(evKind)}</Name>\n");
                 sb.Append("                          <Type>SystemFunction</Type>\n");
                 sb.Append("                        </AttributeList>\n");
                 sb.Append("                        <ObjectList>\n");
@@ -342,6 +347,7 @@ namespace TiaOpennessWorker
                         Tag = JsonParser.GetString(o, "tag") ?? "",
                         ActionKind = JsonParser.GetString(o, "actionKind") ?? "",
                         ActionTag = JsonParser.GetString(o, "actionTag") ?? "",
+                        ActionKindRelease = JsonParser.GetString(o, "actionKindRelease") ?? "",
                     });
                 }
             }

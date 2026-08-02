@@ -406,6 +406,37 @@ namespace TiaOpennessWorker
                             .EndObject());
                     }
 
+                    case "list-hmi":
+                    {
+                        RequireProject(project);
+                        var json = new JsonWriter().BeginObject().BeginArray("hmis");
+                        foreach (var dev in project.Devices)
+                        {
+                            try
+                            {
+                                var t = HmiOperations.GetHmiTarget((Device)dev);
+                                if (t == null) continue;
+                                json.BeginObject().Property("device", dev.Name);
+                                json.BeginArray("connections");
+                                try
+                                {
+                                    foreach (var c in t.Connections)
+                                        json.BeginObject().Property("name", c.Name).EndObject();
+                                }
+                                catch { }
+                                json.EndArray();
+                                json.BeginArray("screens");
+                                foreach (var s in t.ScreenFolder.Screens)
+                                    json.BeginObject().Property("name", s.Name).EndObject();
+                                json.EndArray();
+                                json.EndObject();
+                            }
+                            catch { }
+                        }
+                        json.EndArray().EndObject();
+                        return Ok(id, json);
+                    }
+
                     case "gen-hmi":
                     {
                         RequireProject(project);
