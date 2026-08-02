@@ -29,6 +29,7 @@
   #log { background:#0b0f14; border:1px solid var(--line); border-radius:6px; height:150px; overflow-y:auto; font:12px/1.5 Consolas,monospace; padding:8px; color:var(--dim); }
   .btn-mini { padding:2px 8px; font-size:12px; }
   .bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .hint { background:#2a2413; border:1px solid var(--warn); color:var(--warn); border-radius:8px; padding:8px 14px; margin-bottom:12px; font-size:13px; }
   #result { background:#12181f; border:1px solid var(--line); border-radius:6px; padding:8px; font:12px Consolas,monospace; max-height:220px; overflow:auto; white-space:pre-wrap; }
 </style>
 </head>
@@ -36,13 +37,11 @@
 <h1>⚙ TIA Portal 控制台 <span id="statusBar" class="status st-off">未连接</span></h1>
 
 <div class="grid">
+  <div class="hint">⚠ 请提前打开博图工程再连接 —— "打开工程…" 会将工程加载到您开着的博途窗口中</div>
+
   <!-- 工程 -->
   <div class="panel">
     <h2>工程</h2>
-    <div class="row">
-      <input id="projName" placeholder="工程名(留空自动)" class="wide">
-      <button class="primary" onclick="cmd('create-project',{projectName:val('projName'),outDir:OUT_DIR})">新建工程</button>
-    </div>
     <div class="row">
       <input type="file" id="projFilePicker" accept=".ap21" style="display:none">
       <button class="primary" onclick="document.getElementById('projFilePicker').click()">打开工程…</button>
