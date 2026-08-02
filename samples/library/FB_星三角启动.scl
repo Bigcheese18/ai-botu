@@ -1,0 +1,36 @@
+FUNCTION_BLOCK "FB_星三角启动"
+VERSION : 0.1
+VAR_INPUT
+    b启动 : Bool;              // 启动按钮
+    b停止 : Bool;              // 停止按钮
+    b热继电器 : Bool := TRUE;  // 热保护(正常=TRUE)
+    t星形时间 : Time := T#5S;  // 星形运行时间,到点切三角
+END_VAR
+
+VAR_OUTPUT
+    q主接触器 : Bool;          // 主接触器 KM1
+    q星形接触器 : Bool;        // 星形接触器 KM3
+    q三角接触器 : Bool;        // 三角接触器 KM2
+    q运行 : Bool;              // 运行指示(三角状态)
+    q故障 : Bool;              // 故障指示
+END_VAR
+
+VAR
+    b自锁 : Bool;              // 启动自锁记忆
+    ton星形 : TON_TIME;        // 星形计时
+END_VAR
+
+BEGIN
+    // 启停自锁 + 保护
+    b自锁 := (b启动 OR b自锁) AND NOT b停止 AND b热继电器;
+
+    // 星形计时:自锁期间计时,到点切三角
+    ton星形(IN := b自锁, PT := t星形时间);
+
+    // 接触器输出:星形运行期间主+星,到点切主+三角
+    q主接触器 := b自锁;
+    q星形接触器 := b自锁 AND NOT ton星形.Q;
+    q三角接触器 := b自锁 AND ton星形.Q;
+    q运行 := q三角接触器;
+    q故障 := NOT b热继电器 AND b自锁;
+END_FUNCTION_BLOCK

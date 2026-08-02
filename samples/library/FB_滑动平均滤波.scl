@@ -1,0 +1,54 @@
+FUNCTION_BLOCK "FB_滑动平均滤波"
+VERSION : 0.1
+VAR_INPUT
+    r输入 : Real;                  // 原始信号(每个扫描周期采样)
+    b复位 : Bool;                  // 缓存清零
+END_VAR
+
+VAR_OUTPUT
+    r输出 : Real;                  // 滤波后信号
+END_VAR
+
+VAR
+    ar缓存 : ARRAY[0..9] OF Real;  // 10 点环形缓存
+    i写位 : Int := 0;                   // 当前写入位置
+    b已满 : Bool;                  // 缓存已写满一轮
+END_VAR
+
+VAR_TEMP
+    r和 : Real;                    // 累加和
+    i : Int;                       // 循环变量
+END_VAR
+
+BEGIN
+    // 复位
+    IF b复位 THEN
+        i写位 := 0;
+        b已满 := FALSE;
+        r输出 := 0.0;
+        FOR i := 0 TO 9 DO
+            ar缓存[i] := 0.0;
+        END_FOR;
+    END_IF;
+
+    // 写入环形缓存
+    ar缓存[i写位] := r输入;
+    i写位 := i写位 + 1;
+    IF i写位 >= 10 THEN
+        i写位 := 0;
+        b已满 := TRUE;
+    END_IF;
+
+    // 求均值(未满一轮时按已采点数平均)
+    r和 := 0.0;
+    FOR i := 0 TO 9 DO
+        r和 := r和 + ar缓存[i];
+    END_FOR;
+    IF b已满 THEN
+        r输出 := r和 / 10.0;
+    ELSIF i写位 > 0 THEN
+        r输出 := r和 / INT_TO_REAL(i写位);
+    ELSE
+        r输出 := 0.0;
+    END_IF;
+END_FUNCTION_BLOCK

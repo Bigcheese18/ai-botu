@@ -1,0 +1,71 @@
+FUNCTION_BLOCK "FB_交通灯"
+VERSION : 0.1
+VAR_INPUT
+    b运行 : Bool;                  // 运行使能
+    b故障 : Bool;                  // 故障信号(故障时黄灯闪烁)
+    t绿灯 : Time := T#5S;          // 绿灯时间
+    t黄灯 : Time := T#2S;          // 黄灯时间
+    t红灯 : Time := T#5S;          // 红灯时间
+END_VAR
+
+VAR_OUTPUT
+    q红灯 : Bool;                  // 红灯
+    q黄灯 : Bool;                  // 黄灯
+    q绿灯 : Bool;                  // 绿灯
+END_VAR
+
+VAR
+    ton绿 : TON_TIME;              // 绿灯计时
+    ton黄 : TON_TIME;              // 黄灯计时
+    ton红 : TON_TIME;              // 红灯计时
+    ton闪 : TON_TIME;              // 黄闪计时
+    i状态 : Int := 0;                   // 0=绿灯 1=黄灯 2=红灯
+    b闪相 : Bool := FALSE;                  // 黄闪相位
+END_VAR
+
+BEGIN
+    // 故障模式:黄灯 0.5s 周期闪烁
+    IF b故障 THEN
+        ton闪(IN := TRUE, PT := T#500MS);
+        IF ton闪.Q THEN
+            b闪相 := NOT b闪相;
+            ton闪(IN := FALSE, PT := T#500MS);
+        END_IF;
+        q红灯 := FALSE;
+        q黄灯 := b闪相;
+        q绿灯 := FALSE;
+    ELSIF NOT b运行 THEN
+        // 停止:全灭,回到绿灯起点
+        q红灯 := FALSE;
+        q黄灯 := FALSE;
+        q绿灯 := FALSE;
+        i状态 := 0;
+    ELSIF i状态 = 0 THEN
+        // 绿灯阶段
+        q绿灯 := TRUE;
+        q黄灯 := FALSE;
+        q红灯 := FALSE;
+        ton绿(IN := TRUE, PT := t绿灯);
+        IF ton绿.Q THEN
+            i状态 := 1;
+        END_IF;
+    ELSIF i状态 = 1 THEN
+        // 黄灯过渡
+        q绿灯 := FALSE;
+        q黄灯 := TRUE;
+        q红灯 := FALSE;
+        ton黄(IN := TRUE, PT := t黄灯);
+        IF ton黄.Q THEN
+            i状态 := 2;
+        END_IF;
+    ELSE
+        // 红灯阶段
+        q红灯 := TRUE;
+        q黄灯 := FALSE;
+        q绿灯 := FALSE;
+        ton红(IN := TRUE, PT := t红灯);
+        IF ton红.Q THEN
+            i状态 := 0;
+        END_IF;
+    END_IF;
+END_FUNCTION_BLOCK

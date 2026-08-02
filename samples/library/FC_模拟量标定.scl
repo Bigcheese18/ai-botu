@@ -1,0 +1,36 @@
+FUNCTION "FC_模拟量标定" : Void
+VERSION : 0.1
+VAR_INPUT
+    iRaw : Int;                    // 模拟量原始值(如 IW64)
+    r原始下限 : Real := 0.0;       // 原始值下限(模块配置 4-20mA 量程时=0;配置 0-20mA 而接 4-20mA 时=5530)
+    r原始上限 : Real := 27648.0;   // 原始值上限(20mA = 27648)
+    r工程下限 : Real := 0.0;       // 工程量下限(如温度 0°C)
+    r工程上限 : Real := 100.0;     // 工程量上限(如温度 100°C)
+    b断线检测 : Bool := TRUE;      // 断线检测(4mA 活零特性)
+END_VAR
+
+VAR_OUTPUT
+    r工程值 : Real;                // 标定后的工程量
+    b断线 : Bool;                  // 断线(原始值远低于正常下限)
+END_VAR
+
+BEGIN
+    // 线性标定:工程值 = 工程下限 + (原始值-原始下限) * (工程上限-工程下限) / (原始上限-原始下限)
+    r工程值 := r工程下限 + (INT_TO_REAL(iRaw) - r原始下限)
+               * (r工程上限 - r工程下限) / (r原始上限 - r原始下限);
+
+    // 输出限幅(防止超量程)
+    IF r工程值 < r工程下限 THEN
+        r工程值 := r工程下限;
+    END_IF;
+    IF r工程值 > r工程上限 THEN
+        r工程值 := r工程上限;
+    END_IF;
+
+    // 断线检测:原始值低于正常下限 100 个码(约 0.4mA)判定断线
+    IF b断线检测 AND INT_TO_REAL(iRaw) < r原始下限 - 100.0 THEN
+        b断线 := TRUE;
+    ELSE
+        b断线 := FALSE;
+    END_IF;
+END_FUNCTION

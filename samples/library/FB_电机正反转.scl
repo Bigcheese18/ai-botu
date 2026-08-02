@@ -1,0 +1,68 @@
+FUNCTION_BLOCK "FB_电机正反转"
+VERSION : 0.1
+VAR_INPUT
+    b正转启动 : Bool;          // 正转启动按钮
+    b反转启动 : Bool;          // 反转启动按钮
+    b停止 : Bool;              // 停止按钮(常开触点)
+    b故障复位 : Bool;          // 故障复位按钮
+    b热继电器 : Bool := TRUE;  // 热继电器保护(正常=TRUE)
+    b急停 : Bool := TRUE;      // 急停信号(正常=TRUE)
+    b正转反馈 : Bool;          // 正转接触器辅助触点反馈
+    b反转反馈 : Bool;          // 反转接触器辅助触点反馈
+    t切换延时 : Time := T#500MS; // 正反转切换延时(防电弧)
+END_VAR
+
+VAR_OUTPUT
+    q正转 : Bool;              // 正转接触器输出
+    q反转 : Bool;              // 反转接触器输出
+    q运行 : Bool;              // 任一方向运行指示
+    q故障 : Bool;              // 故障报警(保护/互锁/反馈不一致)
+END_VAR
+
+VAR
+    b正转记忆 : Bool;          // 正转自锁记忆
+    b反转记忆 : Bool;          // 反转自锁记忆
+    b故障锁存 : Bool;          // 故障锁存
+    ton切换 : TON_TIME;        // 方向切换延时定时器
+    ton反馈 : TON_TIME;        // 反馈校验延时(避开接触器吸合瞬间)
+END_VAR
+
+BEGIN
+    // 故障复位(保护恢复正常且按下复位按钮才清)
+    IF b故障复位 AND b热继电器 AND b急停 THEN
+        b故障锁存 := FALSE;
+    END_IF;
+
+    // 故障检测:保护动作,或两个接触器反馈同时吸合(直接短路危险)
+    IF NOT b热继电器 OR NOT b急停 OR (b正转反馈 AND b反转反馈) THEN
+        b故障锁存 := TRUE;
+    END_IF;
+
+    // 方向自锁 + 程序互锁 + 反馈互锁 + 故障封锁
+    b正转记忆 := (b正转启动 OR b正转记忆) AND NOT b停止 AND NOT b反转记忆
+                 AND NOT b反转反馈 AND NOT b故障锁存;
+    b反转记忆 := (b反转启动 OR b反转记忆) AND NOT b停止 AND NOT b正转记忆
+                 AND NOT b正转反馈 AND NOT b故障锁存;
+
+    // 输出(切换延时期间封锁输出)
+    q正转 := b正转记忆 AND NOT ton切换.Q;
+    q反转 := b反转记忆 AND NOT ton切换.Q;
+    q运行 := q正转 OR q反转;
+
+    // 切换延时:任一方向停止后延时 t切换延时,期间禁止输出,防正反转电弧短路
+    IF b正转记忆 OR b反转记忆 THEN
+        ton切换(IN := FALSE, PT := t切换延时);
+    ELSE
+        ton切换(IN := TRUE, PT := t切换延时);
+    END_IF;
+
+    // 反馈校验:输出与反馈不一致持续 1s → 故障(接触器损坏/卡死)
+    IF (q正转 XOR b正转反馈) OR (q反转 XOR b反转反馈) THEN
+        ton反馈(IN := TRUE, PT := T#1S);
+        IF ton反馈.Q THEN
+            b故障锁存 := TRUE;
+        END_IF;
+    ELSE
+        ton反馈(IN := FALSE, PT := T#1S);
+    END_IF;
+END_FUNCTION_BLOCK

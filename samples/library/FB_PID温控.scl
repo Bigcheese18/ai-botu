@@ -1,0 +1,71 @@
+FUNCTION_BLOCK "FB_PID温控"
+VERSION : 0.1
+VAR_INPUT
+    b使能 : Bool;                  // PID 使能
+    r设定值 : Real;                // 温度设定值
+    r实际值 : Real;                // 温度反馈值
+    rKp : Real := 10.0;            // 比例系数
+    rTi : Real := 60.0;            // 积分时间(秒),0=不积分
+    rTd : Real := 0.0;             // 微分时间(秒),0=不微分
+    r输出上限 : Real := 100.0;     // 输出上限(%)
+    r输出下限 : Real := 0.0;       // 输出下限(%)
+    b手动 : Bool;                  // 手动模式
+    r手动输出 : Real;              // 手动输出值(%)
+END_VAR
+
+VAR_OUTPUT
+    r输出 : Real;                  // PID 输出(%)
+    b限幅 : Bool;                  // 输出处于限幅(抗积分饱和激活)
+END_VAR
+
+VAR
+    r偏差 : Real;                  // 当前偏差
+    r上次偏差 : Real;              // 上一周期偏差
+    r积分项 : Real;                // 积分项
+    t周期 : TON_TIME;              // 固定计算周期 100ms
+    b周期到 : Bool;                // 周期脉冲
+END_VAR
+
+BEGIN
+    // 固定 100ms 周期计算
+    t周期(IN := b使能, PT := T#100MS);
+    b周期到 := t周期.Q;
+
+    IF NOT b使能 THEN
+        // 失能:输出与积分清零
+        r输出 := 0.0;
+        r积分项 := 0.0;
+        r上次偏差 := 0.0;
+        b限幅 := FALSE;
+    ELSIF b手动 THEN
+        // 手动模式:输出跟随手动值,积分清零(切自动时无残留)
+        r输出 := r手动输出;
+        r积分项 := 0.0;
+        r上次偏差 := 0.0;
+        b限幅 := FALSE;
+    ELSIF b周期到 THEN
+        // 位置式 PID:输出 = Kp*e + Ki*Σe*T + Kd*(e-e前)/T
+        r偏差 := r设定值 - r实际值;
+        IF rTi > 0.0 THEN
+            r积分项 := r积分项 + r偏差 * (rKp / rTi) * 0.1;
+        ELSE
+            r积分项 := 0.0;
+        END_IF;
+        r输出 := rKp * r偏差 + r积分项 + rTd * (r偏差 - r上次偏差) / 0.1;
+        r上次偏差 := r偏差;
+
+        // 输出限幅 + 抗积分饱和(饱和时停止积分)
+        b限幅 := FALSE;
+        IF r输出 > r输出上限 THEN
+            r输出 := r输出上限;
+            b限幅 := TRUE;
+        END_IF;
+        IF r输出 < r输出下限 THEN
+            r输出 := r输出下限;
+            b限幅 := TRUE;
+        END_IF;
+        IF b限幅 THEN
+            r积分项 := r输出 - rKp * r偏差;
+        END_IF;
+    END_IF;
+END_FUNCTION_BLOCK

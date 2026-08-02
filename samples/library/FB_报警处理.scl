@@ -1,0 +1,42 @@
+FUNCTION_BLOCK "FB_报警处理"
+VERSION : 0.1
+VAR_INPUT
+    b报警输入 : Bool;              // 报警源(TRUE=报警)
+    b确认 : Bool;                  // 报警确认按钮
+    b蜂鸣器测试 : Bool;            // 蜂鸣器测试按钮
+    t蜂鸣时间 : Time := T#5S;      // 蜂鸣器自动停止时间
+END_VAR
+
+VAR_OUTPUT
+    q报警灯 : Bool;                // 报警指示灯(锁存)
+    q蜂鸣器 : Bool;                // 蜂鸣器输出
+    q报警存在 : Bool;              // 当前报警条件仍存在
+END_VAR
+
+VAR
+    b锁存 : Bool;                  // 报警锁存
+    ton蜂鸣 : TON_TIME;            // 蜂鸣器定时
+END_VAR
+
+BEGIN
+    // 报警触发:条件满足即锁存
+    IF b报警输入 THEN
+        b锁存 := TRUE;
+    END_IF;
+    // 复位:条件消失且按下确认
+    IF b确认 AND NOT b报警输入 THEN
+        b锁存 := FALSE;
+    END_IF;
+
+    // 指示灯:锁存且条件仍存在 → 亮;锁存但条件已消失 → 保持(待确认)
+    q报警灯 := b锁存;
+    q报警存在 := b报警输入;
+
+    // 蜂鸣器:锁存未确认时响,到时间自动停;测试键常响
+    IF (b锁存 AND NOT b确认) OR b蜂鸣器测试 THEN
+        ton蜂鸣(IN := TRUE, PT := t蜂鸣时间);
+    ELSE
+        ton蜂鸣(IN := FALSE, PT := t蜂鸣时间);
+    END_IF;
+    q蜂鸣器 := (ton蜂鸣.IN AND NOT ton蜂鸣.Q) OR b蜂鸣器测试;
+END_FUNCTION_BLOCK

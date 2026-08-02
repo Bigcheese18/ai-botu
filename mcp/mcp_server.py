@@ -212,6 +212,30 @@ def import_scl(scl_file: str) -> dict:
 
 
 @mcp.tool()
+def import_scl_source(source: str, name: str) -> dict:
+    """直接导入 SCL 源码字符串(无需先写文件)并生成块,支持中文变量/中文注释。
+
+    优先用这个而不是 import_scl:AI 直接写代码字符串即可。
+    Args:
+        source: 完整的 SCL 源码(FUNCTION_BLOCK / FUNCTION ... END_* 全文)。
+        name: 块名(仅用于临时文件名,实际块名由源码里的块声明决定)。
+    Returns:
+        {sclFile, generated}
+    """
+    import tempfile
+    fd, path = tempfile.mkstemp(prefix="tia_scl_", suffix=".scl")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(source.encode("utf-8"))  # UTF-8(无 BOM,worker 会预处理)
+        return _worker.call("import-scl", {"sclFile": path})
+    finally:
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+
+
+@mcp.tool()
 def compile_project() -> dict:
     """编译当前工程的 PLC 软件,返回结构化诊断。
 

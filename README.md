@@ -86,6 +86,29 @@ AI 写程序走 Claude Code + MCP(`mcp/mcp_server.py`),Web 面板专注手动操
 TiaOpennessWorker.exe run --scl samples/GoodSample.scl --out output
 ```
 
+## 工艺模板库(samples/library/)
+
+AI 写程序优先复用的已验证模块(**全部实测编译 0 错误 0 警告**):
+
+| 模板 | 用途 |
+|---|---|
+| FB_电机正反转 | 四重互锁 + 切换延时 + 反馈校验故障 |
+| FB_星三角启动 | 星三角降压启动 |
+| FB_气缸控制 | 双电磁阀 + 到位检测 + 超时报警 |
+| FB_传送带分拣 | 皮带 + 入口计数 + 奇偶两路分拣 |
+| FC_模拟量标定 | 4-20mA → 工程值(含断线检测) |
+| FB_PID温控 | 位置式 PID + 手动/自动 + 抗积分饱和 |
+| FB_批次计数 | 目标批次 + 确认换批 |
+| FB_报警处理 | 锁存/确认/蜂鸣器 |
+| FB_滑动平均滤波 | 10 点滑动平均 |
+| FB_交通灯 | 绿黄红循环 + 故障黄闪 |
+
+验证脚本:`output/template_check.py`(导入全部 → 编译 → 报告 → 自动清理)。
+
+## 写博图专家 Skill(.claude/skills/tia-expert/)
+
+SCL 语法硬规则(定时器必带 PT、输出参数禁先读后写等)、LAD 配方表、模板清单、编译错误对照表——Claude Code 在该仓库目录下自动加载,任何会话都会写博图。
+
 ## LAD 配方(gen-lad 的 spec.networks[].recipe)
 
 `contact_coil` / `self_lock`(启停自锁)/ `blink`(TON 闪烁)/ `tof` / `tp` /

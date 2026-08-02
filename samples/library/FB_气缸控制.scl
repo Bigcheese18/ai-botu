@@ -1,0 +1,53 @@
+FUNCTION_BLOCK "FB_气缸控制"
+VERSION : 0.1
+VAR_INPUT
+    b使能 : Bool := TRUE;      // 使能(气压正常等)
+    b伸出命令 : Bool;          // 伸出命令
+    b缩回命令 : Bool;          // 缩回命令
+    b伸出到位 : Bool;          // 伸出到位传感器
+    b缩回到位 : Bool;          // 缩回到位传感器
+    t超时 : Time := T#3S;      // 动作超时报警时间
+END_VAR
+
+VAR_OUTPUT
+    q伸出阀 : Bool;            // 伸出电磁阀输出
+    q缩回阀 : Bool;            // 缩回电磁阀输出
+    q伸出到位 : Bool;          // 伸出到位指示
+    q缩回到位 : Bool;          // 缩回到位指示
+    q报警 : Bool;              // 超时/未到位报警
+END_VAR
+
+VAR
+    b伸出执行 : Bool;          // 伸出动作中
+    b缩回执行 : Bool;          // 缩回动作中
+    b报警锁存 : Bool;          // 报警锁存
+    ton动作 : TON_TIME;        // 动作超时定时器
+END_VAR
+
+BEGIN
+    // 命令处理:伸出优先,动作到位自动停阀;缩回与伸出互斥
+    b伸出执行 := b使能 AND b伸出命令 AND NOT b伸出到位 AND NOT b缩回执行;
+    b缩回执行 := b使能 AND b缩回命令 AND NOT b缩回到位 AND NOT b伸出执行;
+
+    // 电磁阀输出
+    q伸出阀 := b伸出执行;
+    q缩回阀 := b缩回执行;
+    q伸出到位 := b伸出到位;
+    q缩回到位 := b缩回到位;
+
+    // 动作超时:命令发出后 t超时 内未到位 → 报警锁存
+    IF (b伸出执行 OR b缩回执行) THEN
+        ton动作(IN := TRUE, PT := t超时);
+        IF ton动作.Q THEN
+            b报警锁存 := TRUE;
+        END_IF;
+    ELSE
+        ton动作(IN := FALSE, PT := t超时);
+    END_IF;
+
+    // 报警复位:缩回到位且无新命令
+    IF b缩回到位 AND NOT b伸出命令 AND NOT b缩回命令 THEN
+        b报警锁存 := FALSE;
+    END_IF;
+    q报警 := b报警锁存;
+END_FUNCTION_BLOCK
