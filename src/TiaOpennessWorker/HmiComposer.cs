@@ -242,21 +242,16 @@ namespace TiaOpennessWorker
             var id = 1;
             foreach (var tag in tags)
             {
-                var length = DefaultLength(tag.DataType);
+                // 最小结构(西门子官方参考):Name + AcquisitionCycle/Connection/ControllerTag 链接。
+                // 多余属性(DataType/HmiDataType/AcquisitionTriggerMode 等)会导致导入报错甚至 TIA 崩溃。
                 sb.Append($"      <Hmi.Tag.Tag ID=\"{id++}\" CompositionName=\"Tags\">\n");
                 sb.Append("        <AttributeList>\n");
-                sb.Append("          <AcquisitionTriggerMode>Visible</AcquisitionTriggerMode>\n");
-                sb.Append("          <AddressAccessMode>Symbolic</AddressAccessMode>\n");
-                sb.Append($"          <Length>{length}</Length>\n");
-                sb.Append("          <LogicalAddress></LogicalAddress>\n");
                 sb.Append($"          <Name>{XmlEsc(tag.Name)}</Name>\n");
                 sb.Append("        </AttributeList>\n");
                 sb.Append("        <LinkList>\n");
                 sb.Append("          <AcquisitionCycle TargetID=\"@OpenLink\"><Name>1 s</Name></AcquisitionCycle>\n");
                 sb.Append($"          <Connection TargetID=\"@OpenLink\"><Name>{XmlEsc(tag.Connection)}</Name></Connection>\n");
                 sb.Append($"          <ControllerTag TargetID=\"@OpenLink\"><Name>{XmlEsc(tag.PlcTag)}</Name></ControllerTag>\n");
-                sb.Append($"          <DataType TargetID=\"@OpenLink\"><Name>{XmlEsc(tag.DataType)}</Name></DataType>\n");
-                sb.Append($"          <HmiDataType TargetID=\"@OpenLink\"><Name>{XmlEsc(tag.DataType)}</Name></HmiDataType>\n");
                 sb.Append("        </LinkList>\n");
                 sb.Append("      </Hmi.Tag.Tag>\n");
             }

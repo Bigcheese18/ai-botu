@@ -363,6 +363,13 @@ namespace TiaOpennessWorker
 
                     case "gen-hmi-tags":
                     {
+                        // 实测(2026-08-02):经典 WinCC Comfort 的变量表 XML 导入
+                        // 会导致 TIA Portal 会话崩溃(多次实测,与 XML 结构无关)。
+                        // 禁用该路径,变量表请手动创建(见 HMI配置清单.md)。
+                        throw new InvalidOperationException(
+                            "经典 WinCC Comfort 不支持变量表 XML 导入(实测会导致 TIA Portal 崩溃)。"
+                            + "请手动创建 HMI 变量表(参考 HMI配置清单.md)。");
+#pragma warning disable CS0162
                         RequireProject(project);
                         if (_hmiTarget == null)
                         {
