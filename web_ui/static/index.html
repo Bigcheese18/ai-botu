@@ -44,15 +44,10 @@
     <h2>工程</h2>
     <div class="row">
       <input type="file" id="projFilePicker" accept=".ap21" style="display:none">
-      <button class="primary" onclick="document.getElementById('projFilePicker').click()">打开工程…</button>
-      <button onclick="cmd('list-projects',{})">列出</button>
-    </div>
-    <div class="row">
-      <button onclick="cmd('add-cpu',{})">+ CPU 1511</button>
-      <button onclick="cmd('add-hmi',{})">+ HMI KTP700</button>
-      <button onclick="cmd('save-project',{})">保存</button>
+      <button class="primary" onclick="document.getElementById('projFilePicker').click()">连接工程…</button>
+      <button onclick="cmd('close-project',{})">断开工程</button>
       <button onclick="cmd('read-project',{outDir:OUT_DIR+'/export'})">读取工程</button>
-      <button onclick="cmd('report',{outDir:OUT_DIR+'/reports'})">生成报告</button>
+      <button onclick="cmd('save-project',{})">保存</button>
     </div>
   </div>
 
