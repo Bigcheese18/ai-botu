@@ -183,7 +183,9 @@ async function refreshStatus() {
     const r = await fetch('/api/status'); const s = await r.json();
     if (s.outDir) OUT_DIR = s.outDir;
     const bar = document.getElementById('statusBar');
-    bar.textContent = s.ready ? (s.attach ? 'Attach: ' + (s.project||'工程') : 'Headless') : '未连接';
+    if (!s.ready) bar.textContent = '未连接';
+    else if (!s.attach) bar.textContent = 'Headless(无界面)';
+    else bar.textContent = s.project ? '已连接: ' + s.project : '已连接(无工程)';
     bar.className = 'status ' + (s.ready ? 'st-ok' : 'st-off');
   } catch(e) {}
 }

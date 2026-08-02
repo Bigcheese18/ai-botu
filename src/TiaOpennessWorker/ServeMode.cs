@@ -194,11 +194,18 @@ namespace TiaOpennessWorker
 
                     case "close-project":
                     {
-                        RequireProject(project);
+                        // 断开是幂等操作:没有打开的工程时也算断开成功
+                        if (project == null)
+                            return Ok(id, new JsonWriter().BeginObject()
+                                .Property("closed", false)
+                                .Property("note", "当前没有打开的工程(已断开)")
+                                .EndObject());
                         project.Close();
                         project = null;
                         plcSoftware = null;
-                        return Ok(id, new JsonWriter().BeginObject().EndObject());
+                        return Ok(id, new JsonWriter().BeginObject()
+                            .Property("closed", true)
+                            .EndObject());
                     }
 
                     case "import-scl":
