@@ -83,11 +83,17 @@ python web_ui/server.py
 面板顶部的 **AI 助手** 用自然语言控制博途:AI(通义千问)自主决定调用工具
 (连接工程 / 加变量表 / 导 SCL / 编梯形图 / 编译诊断),工具执行过程以步骤条显示在聊天区。
 
-```bash
-# 需要 DashScope(阿里云百炼)API key,配置优先级:
-#   1. config.json 的 "llm": {"api_key": "...", "model": "qwen-max"}
-#   2. 环境变量 DASHSCOPE_API_KEY
-#   3. 复用 ~/qwen-vision-mcp/.env 已有的 QWV_API_KEY(自动发现)
+```jsonc
+// config.json(不入库):自由指定 provider / key / model
+{
+  "llm": {
+    "provider": "deepseek",            // deepseek | dashscope | openai
+    "api_key": "sk-...",
+    "model": "deepseek-chat"           // 省略则用 provider 默认
+  }
+}
+// key 回退:config.json → 环境变量(DEEPSEEK_API_KEY / DASHSCOPE_API_KEY)
+//          → 复用 ~/qwen-vision-mcp/.env 的 QWV_API_KEY(自动发现)
 ```
 
 示例提问:"给我建一个电机启停自锁的梯形图块,再加 3 个中文变量"。

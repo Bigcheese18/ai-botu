@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
-"""AI 助手代理:浏览器聊天 → LLM(阿里云百炼通义,OpenAI 兼容接口)→ TIA serve 工具调用。
+"""AI 助手代理:浏览器聊天 → LLM(OpenAI 兼容接口,默认 DeepSeek)→ TIA serve 工具调用。
 
-零依赖(仅标准库 urllib)。API key 配置优先级:
-  1. config.json 的 "llm": {"api_key", "model"}
-  2. 环境变量 DASHSCOPE_API_KEY / DASHSCOPE_MODEL
-  3. 自动读取 ~/qwen-vision-mcp/.env 中的 DASHSCOPE_API_KEY(复用已有 key)
+零依赖(仅标准库 urllib)。配置(config.json 的 "llm" 段,该文件不入库):
+  {
+    "llm": {
+      "provider": "deepseek" | "dashscope" | "openai",
+      "api_key": "sk-...",
+      "model": "deepseek-chat",      // 可选,省略用各 provider 默认
+      "base_url": "..."              // 可选,自定义兼容端点
+    }
+  }
+key 回退顺序:config.json → 环境变量(DEEPSEEK_API_KEY / DASHSCOPE_API_KEY)→
+~/qwen-vision-mcp/.env 的 QWV_API_KEY。
 """
 
 import json
@@ -13,19 +20,25 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-DEFAULT_MODEL = "qwen-max"
-DEFAULT_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+# 各 provider 预设(OpenAI 兼容 /chat/completions 端点)
+PROVIDERS = {
+    "deepseek": {"base_url": "https://api.deepseek.com/chat/completions", "model": "deepseek-chat"},
+    "dashscope": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "model": "qwen-max"},
+    "openai": {"base_url": "https://api.openai.com/v1/chat/completions", "model": "gpt-4o-mini"},
+}
 MAX_TOOL_ROUNDS = 6      # 单条消息最多工具调用轮数
 RESULT_SNIPPET = 8000    # 工具结果回填给 LLM 的最大长度
 
 SYSTEM_PROMPT = (
     "你是 TIA Portal(博途)自动化助手,通过工具操作**用户已经手动打开**的博途工程。规则:\n"
     "1. 开始工作前先调用 connect_project 绑定用户当前打开的工程;如果报错提示没开博途,就请用户先去打开博途窗口。\n"
-    "2. 全部用中文回复,简洁明了,像工程师对工程师说话,不要长篇大论。\n"
-    "3. 每次工具执行完,用一两句话向用户汇报结果;编译有错误时,给出具体修复建议。\n"
-    "4. 写程序前先 read_project 或 list_tag_tables 了解工程现状,避免重复创建同名块/变量。\n"
+    "2. 用户的工程类请求(查看/新建/修改/写入/编译/删除等)**必须通过工具真实执行**,"
+    "禁止只用文字假装完成,禁止编造结果。拿不准先调用 read_project / list_tag_tables 了解现状。\n"
+    "3. 全部用中文回复,简洁明了,像工程师对工程师说话,不要长篇大论。\n"
+    "4. 每次工具执行完,用一两句话向用户汇报结果(成功/失败/数量);编译有错误时给出具体修复建议。\n"
     "5. 用户要变量表用 add_tags,要程序用 import_scl(SCL 源文件)或 generate_lad_block(梯形图配方)。\n"
-    "6. 写 SCL 时尽量用中文变量名和中文注释,支持 UTF-8。"
+    "6. 写 SCL 时尽量用中文变量名和中文注释,支持 UTF-8。\n"
+    "7. 工具执行失败时,如实告诉用户失败原因,并给出下一步建议。"
 )
 
 # 工具定义(OpenAI 兼容 function calling 格式),映射见 TOOL_MAP
@@ -101,12 +114,19 @@ class ChatAgent:
         self.worker = worker
         cfg = self._load_config()
         envf = self._env_file_values()  # ~/qwen-vision-mcp/.env(用户已有配置)
-        self.api_key = (cfg.get("api_key") or os.environ.get("DASHSCOPE_API_KEY")
-                        or os.environ.get("QWV_API_KEY") or envf.get("QWV_API_KEY")
-                        or envf.get("DASHSCOPE_API_KEY"))
-        self.model = cfg.get("model") or os.environ.get("DASHSCOPE_MODEL") or DEFAULT_MODEL
-        base = (cfg.get("base_url") or os.environ.get("QWV_BASE_URL")
-                or envf.get("QWV_BASE_URL") or DEFAULT_BASE)
+        provider = (cfg.get("provider") or "dashscope").lower()
+        prov = PROVIDERS.get(provider, {})
+        # key 优先级:config.json → 对应 provider 环境变量 → qwen-vision/.env 复用
+        key = cfg.get("api_key") or ""
+        if not key and provider == "deepseek":
+            key = os.environ.get("DEEPSEEK_API_KEY") or ""
+        if not key:
+            key = os.environ.get("DASHSCOPE_API_KEY") or envf.get("QWV_API_KEY") or envf.get("DASHSCOPE_API_KEY") or ""
+        self.api_key = key
+        self.model = (cfg.get("model") or os.environ.get("DASHSCOPE_MODEL")
+                      or prov.get("model") or "deepseek-chat")
+        base = (cfg.get("base_url") or prov.get("base_url")
+                or envf.get("QWV_BASE_URL") or "https://api.deepseek.com/chat/completions")
         self.base_url = base if base.endswith("/chat/completions") else base.rstrip("/") + "/chat/completions"
         self.history = []
 
@@ -136,8 +156,7 @@ class ChatAgent:
     def _call_llm(self, messages, tools=None):
         if not self.api_key:
             raise RuntimeError(
-                "未配置 AI 服务:请在 config.json 设置 llm.api_key,或设环境变量 DASHSCOPE_API_KEY / QWV_API_KEY"
-                "(也可复用 ~/qwen-vision-mcp/.env 里已有的 QWV_API_KEY)"
+                "未配置 AI 服务:请在 config.json 设置 \"llm\": {\"provider\": \"deepseek\", \"api_key\": \"sk-...\"}"
             )
         payload = {"model": self.model, "messages": messages, "temperature": 0.2}
         if tools:
