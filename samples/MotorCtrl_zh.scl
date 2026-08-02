@@ -1,0 +1,52 @@
+FUNCTION_BLOCK "FB_MotorCtrlZh"
+VERSION : 0.1
+VAR_INPUT
+    bStart : Bool;        // 启动按钮
+    bStop : Bool;         // 停止按钮
+    bFault : Bool;        // 外部故障信号
+    tMaxRun : Time;       // 最大运行时间(超时保护)
+END_VAR
+
+VAR_OUTPUT
+    bRun : Bool;          // 电机运行输出
+    bFaultLamp : Bool;    // 故障指示灯
+    bTimeout : Bool;      // 超时标志
+END_VAR
+
+VAR
+    tonRun : TON_TIME;    // 运行计时器
+    bRunLatch : Bool;     // 运行自锁位
+    bFaultLatch : Bool;   // 故障锁存位
+END_VAR
+
+BEGIN
+    // 故障锁存:发生故障保持到停止按钮按下
+    IF bFault THEN
+        bFaultLatch := TRUE;
+    END_IF;
+    IF bStop THEN
+        bFaultLatch := FALSE;
+    END_IF;
+
+    // 启停自锁:启动(无故障)置位,停止或故障复位
+    IF bStart AND NOT bFaultLatch THEN
+        bRunLatch := TRUE;
+    END_IF;
+    IF bStop OR bFaultLatch THEN
+        bRunLatch := FALSE;
+    END_IF;
+
+    // 运行输出
+    bRun := bRunLatch AND NOT bFault;
+
+    // 超时保护:连续运行超过 tMaxRun 自动停机并亮灯
+    tonRun(IN := bRun, PT := tMaxRun);
+    bTimeout := tonRun.Q;
+    IF bTimeout THEN
+        bRunLatch := FALSE;
+        bRun := FALSE;
+        bFaultLamp := TRUE;
+    ELSE
+        bFaultLamp := bFaultLatch OR bFault;
+    END_IF;
+END_FUNCTION_BLOCK

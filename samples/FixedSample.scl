@@ -1,0 +1,16 @@
+FUNCTION_BLOCK "FB_Broken"
+VERSION : 0.1
+VAR_INPUT
+    bStart : Bool;
+END_VAR
+
+VAR
+    iCounter : Int;
+END_VAR
+
+BEGIN
+    IF bStart THEN
+        // AI 修复:拼写错误 iCounte -> iCounter
+        iCounter := iCounter + 1;
+    END_IF;
+END_FUNCTION_BLOCK

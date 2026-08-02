@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>TiaOpennessWorker</AssemblyName>
+    <RootNamespace>TiaOpennessWorker</RootNamespace>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+
+  <!--
+    文章避坑要点:不要把 Siemens.Engineering 相关 DLL 复制到程序输出目录长期分发。
+    Copy Local = False,运行时由 AssemblyResolver 从 TIA Portal 安装目录解析。
+
+    编译期引用:默认探测 TIA Portal 标准安装位置,非标准安装用
+    dotnet build -p:TiaApiDir="D:\路径\PublicAPI\V21\net48" 覆盖。
+  -->
+  <PropertyGroup>
+    <TiaApiDir Condition="'$(TiaApiDir)' == ''">C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48</TiaApiDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Siemens.Engineering.Base">
+      <HintPath>$(TiaApiDir)\Siemens.Engineering.Base.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Siemens.Engineering.Step7">
+      <HintPath>$(TiaApiDir)\Siemens.Engineering.Step7.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Siemens.Engineering.WinCC">
+      <HintPath>$(TiaApiDir)\Siemens.Engineering.WinCC.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="app.config" />
+  </ItemGroup>
+
+</Project>

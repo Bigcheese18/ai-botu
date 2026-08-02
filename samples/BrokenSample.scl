@@ -1,0 +1,16 @@
+FUNCTION_BLOCK "FB_Broken"
+VERSION : 0.1
+VAR_INPUT
+    bStart : Bool;
+END_VAR
+
+VAR
+    iCounter : Int;
+END_VAR
+
+BEGIN
+    IF bStart THEN
+        // 故意引用未定义的变量,模拟 AI 生成出错
+        iCounter := iCounte + 1;
+    END_IF;
+END_FUNCTION_BLOCK

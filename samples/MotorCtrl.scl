@@ -1,0 +1,52 @@
+FUNCTION_BLOCK "FB_MotorCtrl"
+VERSION : 0.1
+VAR_INPUT
+    bStart : Bool;        // Start button
+    bStop : Bool;         // Stop button
+    bFault : Bool;        // External fault signal
+    tMaxRun : Time;       // Max run time (timeout protection)
+END_VAR
+
+VAR_OUTPUT
+    bRun : Bool;          // Motor run output
+    bFaultLamp : Bool;    // Fault indicator lamp
+    bTimeout : Bool;      // Timeout flag
+END_VAR
+
+VAR
+    tonRun : TON_TIME;    // Run timer
+    bRunLatch : Bool;     // Run latch bit
+    bFaultLatch : Bool;   // Fault latch bit
+END_VAR
+
+BEGIN
+    // Fault latch: hold until stop button pressed
+    IF bFault THEN
+        bFaultLatch := TRUE;
+    END_IF;
+    IF bStop THEN
+        bFaultLatch := FALSE;
+    END_IF;
+
+    // Start/stop latch
+    IF bStart AND NOT bFaultLatch THEN
+        bRunLatch := TRUE;
+    END_IF;
+    IF bStop OR bFaultLatch THEN
+        bRunLatch := FALSE;
+    END_IF;
+
+    // Run output
+    bRun := bRunLatch AND NOT bFault;
+
+    // Timeout protection: stop automatically after tMaxRun
+    tonRun(IN := bRun, PT := tMaxRun);
+    bTimeout := tonRun.Q;
+    IF bTimeout THEN
+        bRunLatch := FALSE;
+        bRun := FALSE;
+        bFaultLamp := TRUE;
+    ELSE
+        bFaultLamp := bFaultLatch OR bFault;
+    END_IF;
+END_FUNCTION_BLOCK

@@ -1,0 +1,24 @@
+# 构建产物
+bin/
+obj/
+*.user
+
+# 运行生成物
+output/
+lad/
+hmi/
+samples/generated/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.vs/
+.idea/
+*.suo
+
+# 本地配置
+*.local.json

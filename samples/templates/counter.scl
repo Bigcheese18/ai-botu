@@ -1,0 +1,28 @@
+FUNCTION_BLOCK "FB_Counter"
+VERSION : 0.1
+VAR_INPUT
+    bSensor : Bool;      // 计数传感器信号(上升沿计数)
+    bReset : Bool;       // 计数器复位
+END_VAR
+
+VAR_OUTPUT
+    qFull : Bool;        // 达到目标数量输出
+    iCount : Int;        // 当前计数值
+END_VAR
+
+VAR
+    ctuCount : CTU_INT;  // IEC 计数器实例
+    iTarget : Int;       // 目标数量
+END_VAR
+
+BEGIN
+    iTarget := {{TARGET}};
+    ctuCount(CU := bSensor, R := bReset, PV := iTarget);
+    iCount := ctuCount.CV;
+    // 达到目标数量输出(用计数值比较,不依赖 Q 引脚)
+    IF ctuCount.CV >= iTarget THEN
+        qFull := TRUE;
+    ELSE
+        qFull := FALSE;
+    END_IF;
+END_FUNCTION_BLOCK

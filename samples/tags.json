@@ -1,0 +1,5 @@
+[
+  {"name": "Motor_On",   "dataType": "Bool", "address": "I0.0"},
+  {"name": "Motor_Speed", "dataType": "Int",  "address": "MW10"},
+  {"name": "Motor_Value", "dataType": "Real", "address": ""}
+]

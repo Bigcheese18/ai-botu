@@ -1,0 +1,49 @@
+FUNCTION_BLOCK "FB_MotorRev"
+VERSION : 0.1
+VAR_INPUT
+    bStartFwd : Bool;    // 正转启动
+    bStartRev : Bool;    // 反转启动
+    bStop : Bool;        // 停止
+    bOverload : Bool;    // 过载保护信号
+END_VAR
+
+VAR_OUTPUT
+    qFwd : Bool;         // 正转输出
+    qRev : Bool;         // 反转输出
+    qFault : Bool;       // 故障指示灯
+END_VAR
+
+VAR
+    bFwdLatch : Bool;    // 正转自锁位
+    bRevLatch : Bool;    // 反转自锁位
+    bFaultLatch : Bool;  // 故障锁存位
+END_VAR
+
+BEGIN
+    // 故障锁存:过载发生保持,直到按下停止
+    IF bOverload THEN
+        bFaultLatch := TRUE;
+    END_IF;
+    IF bStop THEN
+        bFaultLatch := FALSE;
+    END_IF;
+
+    // 正转启动:无故障且当前未反转
+    IF bStartFwd AND NOT bFaultLatch AND NOT bRevLatch THEN
+        bFwdLatch := TRUE;
+    END_IF;
+    // 反转启动:无故障且当前未正转(互锁)
+    IF bStartRev AND NOT bFaultLatch AND NOT bFwdLatch THEN
+        bRevLatch := TRUE;
+    END_IF;
+    // 停止/故障时全部复位
+    IF bStop OR bFaultLatch THEN
+        bFwdLatch := FALSE;
+        bRevLatch := FALSE;
+    END_IF;
+
+    // 输出:自锁保持且无过载
+    qFwd := bFwdLatch AND NOT bOverload;
+    qRev := bRevLatch AND NOT bOverload;
+    qFault := bFaultLatch OR bOverload;
+END_FUNCTION_BLOCK

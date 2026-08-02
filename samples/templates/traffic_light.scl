@@ -1,0 +1,54 @@
+FUNCTION_BLOCK "FB_TrafficLight"
+VERSION : 0.1
+VAR_INPUT
+    bRun : Bool;        // 运行使能
+END_VAR
+
+VAR_OUTPUT
+    qRed : Bool;        // 红灯
+    qYellow : Bool;     // 黄灯
+    qGreen : Bool;      // 绿灯
+END_VAR
+
+VAR
+    tonGreen : TON_TIME;   // 绿灯定时器
+    tonYellow : TON_TIME;  // 黄灯定时器
+    tonRed : TON_TIME;     // 红灯定时器
+    iState : Int;          // 状态:0=绿灯 1=黄灯 2=红灯
+END_VAR
+
+BEGIN
+    IF NOT bRun THEN
+        iState := 0;
+        qRed := FALSE;
+        qYellow := FALSE;
+        qGreen := FALSE;
+    ELSIF iState = 0 THEN
+        // 绿灯阶段
+        qGreen := TRUE;
+        qYellow := FALSE;
+        qRed := FALSE;
+        tonGreen(IN := TRUE, PT := T#{{GREEN_TIME}});
+        IF tonGreen.Q THEN
+            iState := 1;
+        END_IF;
+    ELSIF iState = 1 THEN
+        // 黄灯过渡
+        qGreen := FALSE;
+        qYellow := TRUE;
+        qRed := FALSE;
+        tonYellow(IN := TRUE, PT := T#{{YELLOW_TIME}});
+        IF tonYellow.Q THEN
+            iState := 2;
+        END_IF;
+    ELSE
+        // 红灯阶段
+        qRed := TRUE;
+        qYellow := FALSE;
+        qGreen := FALSE;
+        tonRed(IN := TRUE, PT := T#{{RED_TIME}});
+        IF tonRed.Q THEN
+            iState := 0;
+        END_IF;
+    END_IF;
+END_FUNCTION_BLOCK

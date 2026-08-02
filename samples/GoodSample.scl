@@ -1,0 +1,22 @@
+FUNCTION_BLOCK "FB_Test"
+VERSION : 0.1
+VAR_INPUT
+    bStart : Bool;
+END_VAR
+
+VAR_OUTPUT
+    qRun : Bool;
+END_VAR
+
+VAR
+    iCounter : Int;
+END_VAR
+
+BEGIN
+    IF bStart THEN
+        iCounter := iCounter + 1;
+        qRun := TRUE;
+    ELSE
+        qRun := FALSE;
+    END_IF;
+END_FUNCTION_BLOCK

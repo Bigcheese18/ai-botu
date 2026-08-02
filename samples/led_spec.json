@@ -1,0 +1,34 @@
+{
+  "type": "FB",
+  "name": "FB_LedControl",
+  "number": 20001,
+  "comment": "LED 控制演示:启动/停止自锁(电机或运行状态)+ 运行 LED 以 500ms 周期闪烁",
+  "interface": {
+    "input": [
+      {"name": "bStart", "datatype": "Bool"},
+      {"name": "bStop", "datatype": "Bool"}
+    ],
+    "output": [
+      {"name": "bRun", "datatype": "Bool"},
+      {"name": "bLed", "datatype": "Bool"}
+    ],
+    "static": [
+      {"name": "tonBlink", "datatype": "TON_TIME"}
+    ],
+    "temp": []
+  },
+  "networks": [
+    {
+      "title": "N1 启停自锁",
+      "comment": "bStart 启动,bStop 停止,输出 bRun 自锁保持",
+      "recipe": "self_lock",
+      "args": {"start": "bStart", "stop": "bStop", "output": "bRun"}
+    },
+    {
+      "title": "N2 LED 闪烁",
+      "comment": "运行期间 LED 以 500ms 周期闪烁(自复位定时器)",
+      "recipe": "blink",
+      "args": {"enable": "bRun", "output": "bLed", "ton": "tonBlink", "period": "T#500ms"}
+    }
+  ]
+}
