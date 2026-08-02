@@ -179,10 +179,46 @@ namespace TiaOpennessWorker
                             .EndObject());
                     }
 
+                    case "connect":
+                    {
+                        // 用户场景:博途窗口已打开 → 绑定窗口中打开的工程(不重复打开文件)。
+                        // 有多个工程时取第一个,可用 use-project 切换。
+                        foreach (var p in manager.TiaPortal.Projects)
+                        {
+                            if (!(p is Project proj)) continue;
+                            project = proj;
+                            projectName = proj.Name;
+                            try { outDir = Path.GetDirectoryName(proj.Path.FullName); } catch { }
+                            try { plcSoftware = FindFirstPlcSoftware(proj); }
+                            catch { plcSoftware = null; }
+                            return Ok(id, new JsonWriter().BeginObject()
+                                .Property("attached", true)
+                                .Property("projectName", projectName)
+                                .EndObject());
+                        }
+                        return Ok(id, new JsonWriter().BeginObject()
+                            .Property("attached", true)
+                            .Property("projectName", "")
+                            .Property("note", "博途窗口里没有打开的工程:请先手动打开工程,再点连接")
+                            .EndObject());
+                    }
+
                     case "open-project":
                     {
                         var file = JsonParser.GetString(args, "projectFile");
                         if (string.IsNullOrEmpty(file)) throw new InvalidOperationException("缺少参数: projectFile");
+                        // Attach 用户实例时:同名工程已在窗口中打开 → 直接切换,
+                        // 避免重复打开同一工程报"指定的路径无效"
+                        var wantName = Path.GetFileNameWithoutExtension(file);
+                        if (_attached && project != null && string.Equals(project.Name, wantName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return Ok(id, new JsonWriter().BeginObject()
+                                .Property("projectFile", file)
+                                .Property("projectName", project.Name)
+                                .Property("alreadyOpen", true)
+                                .Property("note", "工程已在博途窗口中打开,直接使用")
+                                .EndObject());
+                        }
                         project = ProjectOperations.OpenProject(manager.TiaPortal, file);
                         plcSoftware = FindFirstPlcSoftware(project);
                         projectName = Path.GetFileNameWithoutExtension(file);
