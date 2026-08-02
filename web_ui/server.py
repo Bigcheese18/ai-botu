@@ -70,6 +70,46 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b'{"error":"not found"}')
 
     def do_POST(self):
+        if self.path == "/api/upload":
+            # 前端文件选择器拿到的是 fakepath,文件需经上传接口落到本机再打开
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                ctype = self.headers.get("Content-Type", "")
+                import re
+                m = re.search(r"boundary=([^;]+)", ctype)
+                if not m:
+                    raise ValueError("not multipart")
+                body = self.rfile.read(length)
+                boundary = ("--" + m.group(1)).encode()
+                upload_dir = Path(OUT_DIR) / "uploads"
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                saved = None
+                for part in body.split(boundary):
+                    if b'filename="' not in part:
+                        continue
+                    header_end = part.find(b"\r\n\r\n")
+                    if header_end < 0:
+                        continue
+                    filename = re.search(rb'filename="([^"]+)"', part[:header_end])
+                    if not filename:
+                        continue
+                    content = part[header_end + 4:]
+                    if content.endswith(b"\r\n"):
+                        content = content[:-2]
+                    name = filename.group(1).decode("utf-8", "replace")
+                    if not name.lower().endswith(".ap21"):
+                        continue
+                    target = upload_dir / name
+                    target.write_bytes(content)
+                    saved = str(target)
+                    break
+                if not saved:
+                    raise ValueError("no .ap21 file in upload")
+                log(f"⬆ 上传工程文件: {saved}")
+                self._send(200, json.dumps({"ok": True, "path": saved}, ensure_ascii=False).encode("utf-8"))
+            except Exception as ex:
+                self._send(400, json.dumps({"ok": False, "error": str(ex)}, ensure_ascii=False).encode("utf-8"))
+            return
         if self.path == "/api/save-scl":
             try:
                 length = int(self.headers.get("Content-Length", 0))

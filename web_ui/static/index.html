@@ -44,8 +44,8 @@
       <button class="primary" onclick="cmd('create-project',{projectName:val('projName'),outDir:OUT_DIR})">新建工程</button>
     </div>
     <div class="row">
-      <input id="projFile" placeholder=".ap21 绝对路径" class="wide">
-      <button onclick="cmd('open-project',{projectFile:val('projFile')})">打开</button>
+      <input type="file" id="projFilePicker" accept=".ap21" style="display:none">
+      <button class="primary" onclick="document.getElementById('projFilePicker').click()">打开工程…</button>
       <button onclick="cmd('list-projects',{})">列出</button>
     </div>
     <div class="row">
@@ -67,36 +67,6 @@
     </div>
     <div id="tagRows"></div>
     <div class="row"><button class="btn-mini" onclick="addTagRow()">+ 一行</button></div>
-  </div>
-
-  <!-- 程序生成 -->
-  <div class="panel">
-    <h2>程序生成(模板)</h2>
-    <div class="row">
-      <select id="tplSel">
-        <option value="traffic-light">交通灯(绿/黄/红)</option>
-        <option value="motor-rev">电机正反转互锁</option>
-        <option value="counter">计数分拣</option>
-      </select>
-      <input id="tplParams" placeholder='如 {"GREEN_TIME":"5s","RED_TIME":"8s"}' class="wide">
-      <button class="primary" onclick="genTemplate()">生成并导入</button>
-    </div>
-    <h2>LAD 配方</h2>
-    <div class="row">
-      <select id="ladRecipe">
-        <option value="self_lock">自锁(启/停/输出)</option>
-        <option value="blink">闪烁(使能/输出/周期)</option>
-        <option value="contact_coil">单触点输出</option>
-        <option value="set">置位</option>
-        <option value="reset">复位</option>
-        <option value="compare">比较</option>
-        <option value="arith">算术</option>
-      </select>
-      <button onclick="genLad()">生成 LAD 块</button>
-    </div>
-    <h2>SCL 源码(中文注释可用)</h2>
-    <textarea id="sclCode" placeholder="粘贴 SCL 代码…"></textarea>
-    <div class="row"><button class="primary" onclick="importScl()">导入 SCL</button></div>
   </div>
 
   <!-- 编译与读取 -->
@@ -163,35 +133,25 @@ async function addTags() {
   await cmd('add-tags', {table: val('tagTable'), tags});
 }
 
-async function genTemplate() {
-  let params = {};
-  try { params = JSON.parse(val('tplParams') || '{}'); } catch(e) {}
-  await cmd('gen-template', {template: val('tplSel'), params});
-}
-
-async function genLad() {
-  // 简化:自锁/闪烁走完整 spec,其余用配方网络
-  const recipe = val('ladRecipe');
-  let spec;
-  if (recipe === 'self_lock') {
-    spec = {type:'FB', name:'FB_SelfLock', number:21001, comment:'启停自锁', interface:{input:[{name:'bStart',datatype:'Bool'},{name:'bStop',datatype:'Bool'}],output:[{name:'qOut',datatype:'Bool'}]}, networks:[{title:'N1 自锁',recipe:'self_lock',args:{start:'bStart',stop:'bStop',output:'qOut'}}]};
-  } else if (recipe === 'blink') {
-    spec = {type:'FB', name:'FB_Blink', number:21002, comment:'LED 闪烁', interface:{input:[{name:'bEnable',datatype:'Bool'}],output:[{name:'bLed',datatype:'Bool'}],static:[{name:'tonB',datatype:'TON_TIME'}]}, networks:[{title:'N1 闪烁',recipe:'blink',args:{enable:'bEnable',output:'bLed',ton:'tonB',period:'T#500ms'}}]};
-  } else {
-    alert('该配方请用 gen-lad spec(见文档),或选自锁/闪烁');
-    return;
+// 打开工程:文件选择器 → 上传到本机 → 打开
+document.getElementById('projFilePicker').addEventListener('change', async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const resultEl = document.getElementById('result');
+  resultEl.innerHTML = '<span class="warn">上传工程文件…</span>';
+  try {
+    const fd = new FormData();
+    fd.append('file', f);
+    const r = await fetch('/api/upload', {method:'POST', body: fd});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '上传失败');
+    await cmd('open-project', {projectFile: d.path});
+  } catch(err) {
+    resultEl.innerHTML = '<span class="err">打开失败: ' + err + '</span>';
+  } finally {
+    e.target.value = '';
   }
-  await cmd('gen-lad', {spec, outDir: OUT_DIR + '/lad'});
-}
-
-async function importScl() {
-  const code = document.getElementById('sclCode').value;
-  if (!code.trim()) return alert('请粘贴 SCL 代码');
-  const name = (code.match(/FUNCTION_BLOCK\s+"([^"]+)"/) || [,'SCL_Import'])[1];
-  const resp = await fetch('/api/save-scl', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, code})});
-  if (!resp.ok) return alert('保存源码失败');
-  await cmd('import-scl', {sclFile: OUT_DIR + '/scl/' + name + '.scl'});
-}
+});
 
 async function refreshStatus() {
   try {
