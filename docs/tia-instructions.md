@@ -184,6 +184,13 @@ TIA 指令面板的 **"工艺"(Technology)文件夹**下按 CPU 分组:S7-1200 M
 
 **Easy Motion Control**(简化选件包):提供 _Easy 系列简化指令(MC_Power_Easy 等),参数少、上手快,适合简单定位应用;细节以官方手册为准。
 
+**SINAMICS 驱动指令族(选件包 → SINAMICS,需装 Startdrive 或 DriveLib 库)**:
+- **SINA_PARA (FB286)/ SINA_PARAS**:非周期通信,一次读写**最多 16 个**驱动参数(PROFINET/PROFIBUS,S/G 系列如 G120)。管脚:Start 上升沿 / ReadWrite(0=读,1=写)/ ParaNo(1~16)/ LAddr(报文槽硬件 ID)/ AxisNo(多轴,G120 用 1)→ Done/Error/ErrorId。参数在实例 DB 的 `sxParameter[x]` 数组配置:`siParaNo`(参数号,如 1001)、`siIndex`(下标)、`srValue`(**32 位浮点格式**,写 p1000=6 填 6.0)。
+- **SINA_SPEED (FB285)**:周期通信速度控制,**必须配标准报文 1**(PZD-2/2);管脚 Execute/Velocity/FactPRM(与驱动 P2000 参考转速一致)/AckFlt。
+- **SINA_POS (FB284)**:周期通信 **EPOS 基本定位控制**(V90 等),**必须配标准报文 111**。
+- ⚠ FB285/286 内部已调用 SFC14/SFC15,同一驱动不要再单独用 SFC14/15。
+- 典型应用(批量改 G120C):P10=3 调试模式 → P304/P305 电机额定电压电流 → P1900 禁用识别 → **P971=1 保存到 EEPROM**(保存完自动复位) → P10=0 恢复就绪。
+
 **补充指令**:MC_CommandTable(命令表顺序执行)、MC_ChangeDynamic(在线改动态)、MC_ReadParam/MC_WriteParam(读写轴参数)、MC_SetSensor(换编码器源)。
 **行为要点**:MC_MoveVelocity 的 Velocity=0 等价 MC_Halt(按组态减速度停止);各运动指令互有**超驰**关系(新命令中止旧命令,旧命令输出 CommandAborted)。
 
