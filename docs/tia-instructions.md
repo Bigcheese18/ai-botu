@@ -166,7 +166,35 @@ MC 指令均为功能块,作用于**轴工艺对象**(TO_Axis/TO_SpeedAxis/TO_Po
 - 同步失败查 ErrorID(主轴丢失/从轴超限)→ MC_Reset 恢复。
 - **CIMC 模板衔接**:`samples/FB_MotorCtrl.scl` 是上述指令的软件模拟(状态机 + 位置积分模拟),接真实轴时把对应状态替换为 MC_Power/MC_Home/MC_MoveVelocity/MC_MoveAbsolute/MC_GearIn 调用;S7-1500T 之外的 CPU 只能软件同步(手写比例跟随逻辑)。
 
-## 12. 与实测经验的交叉规则(写程序必查)
+## 12. 选件包与软件版本(决定哪些功能能用)
+
+**CPU 四类**:标准型(Standard)/ 故障安全型(F)/ 技术型(T,运动控制+技术对象)/ 技术+故障安全型(TF)。同步控制等高级运动功能仅 T/TF CPU。
+
+**STEP 7 Basic vs Professional**:
+- Basic:S7-1200 编程(LAD/FBD/SCL),集成 WinCC Basic 组态精简面板。
+- Professional:全部 SIMATIC 控制器(1200/1500/300/400/WinAC),多 STL(语句表)+ GRAPH(顺序功能图);**S7-SCL/S7-GRAPH/S7-PLCSIM 已集成,无需额外许可**。
+
+**WinCC 四级**:
+- Basic:Basic 面板(随 STEP 7 附带)
+- Comfort:全部面板(Comfort/Mobile/x77/Multi Panels)
+- Advanced:面板 + PC 单站 Runtime Advanced(128~8k PowerTags)
+- Professional:Advanced + SCADA Runtime Professional(512/4096/max PowerTags,单站到多站/Web 客户端)
+- 可经 Power Packs 升级;扩展包:WinCC Client/Server/Recipes/WebNavigator/DataMonitor 等。
+
+**运动控制选件**:
+- S7-1500T(T CPU)额外支持:**绝对齿轮同步**(MC_GearInPos)、**凸轮同步**(MC_CamIn)、**实际值耦合**(外部编码器/另一轴实际位置作主值)。
+- 标准 S7-1500 仅相对齿轮同步等基础 MC;普通 CPU 的"同步"只能软件模拟(见 FB_MotorCtrl)。
+
+**其他选件**:
+- **STEP 7 Safety Advanced**:F-CPU(1200F/1500F)安全编程,LAD/FBD,内置 TÜV 认证安全库,标准+安全程序同 CPU 运行;安全程序需 F-CPU 硬件。
+- **S7-PLCSIM / PLCSIM ADV**:仿真(ADV 版支持 OPC/Web 仿真)。
+- **SINAMICS Startdrive**:驱动(如 G120)工程组态集成。
+- **SCOUT**:SIMOTION 运动控制组态。
+- **Openness 选项包**:API 自动化(本项目依赖)。
+
+**安装与版本**:推荐顺序 STEP 7 → PLCSIM → WinCC → Startdrive → Safety;⚠ 所有模块必须同版本(含 SP/Update),否则无法启动;V15 起 STEP 7 与 WinCC 集成安装;选件包与 CPU 固件版本需匹配(如 HSC 的 CTRL_HSC_EXT 需 V4.2+ 固件)。
+
+## 13. 与实测经验的交叉规则(写程序必查)
 
 1. ⚠ 定时器每次调用带 PT(含复位式)。
 2. ⚠ 输出参数禁"先读后写" → 静态缓存 + 输出映射;条件分支先读后写同样警告 → 增量变量 + 无条件累加。
