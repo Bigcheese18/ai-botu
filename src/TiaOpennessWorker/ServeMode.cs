@@ -45,59 +45,28 @@ namespace TiaOpennessWorker
         {
             using (var manager = new TiaPortalManager())
             {
-                // 两种场景:
-                //  1) 用户已打开 TIA Portal(带界面/工程)→ Attach 进用户实例,AI 直接
-                //     写进用户正在看的工程,界面实时可见。不清理进程、不动用户实例。
-                //  2) 无运行实例 → 启动 headless 实例(带清理/看门狗/重试,自愈)。
+                // 只支持用户场景:必须先手动打开博途窗口,worker 附着进用户实例干活,
+                // 用户能亲眼看到每一步执行。不再自动启动无界面(headless)实例。
                 var attached = false;
                 try { attached = TiaPortal.GetProcesses().Count > 0; }
                 catch { }
                 _attached = attached;
 
-                if (attached)
+                if (!attached)
                 {
-                    Console.Error.WriteLine("[info] 检测到已运行的 TIA Portal,执行 Attach(用户场景)");
-                    // Attach 一般几秒完成;兜底看门狗只退出进程,不杀用户 TIA
-                    var attachWatchdog = new System.Threading.Timer(_ =>
-                    {
-                        Console.Error.WriteLine("[warn] Attach 超时(120s),退出进程(不动用户 TIA)");
-                        Environment.Exit(3);
-                    }, null, TimeSpan.FromSeconds(120), System.Threading.Timeout.InfiniteTimeSpan);
-                    try { manager.Connect(TiaPortalMode.WithoutUserInterface); }
-                    finally { attachWatchdog.Dispose(); }
+                    Console.Error.WriteLine("[error] 未检测到运行中的 TIA Portal:请先打开博途窗口(并载入工程),再连接");
+                    return 2;
                 }
-                else
-                {
-                    // TIA 启动偶发卡死(实测:强杀后的会话租约/锁未释放,立即启动会静默挂起)。
-                    // 自愈策略:启动前清理残留进程;150 秒未就绪 → 清理 → 等 60 秒 → 重试一次。
-                    for (var attempt = 1; ; attempt++)
-                    {
-                        var timedOut = false;
-                        var watchdog = new System.Threading.Timer(_ =>
-                        {
-                            Console.Error.WriteLine($"[warn] TIA 启动超时(150s,第 {attempt} 次),清理进程");
-                            timedOut = true;
-                            KillSiemensProcesses();
-                        }, null, TimeSpan.FromSeconds(150), System.Threading.Timeout.InfiniteTimeSpan);
 
-                        try
-                        {
-                            KillSiemensProcesses();
-                            manager.Connect(TiaPortalMode.WithoutUserInterface);
-                            watchdog.Dispose();
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            watchdog.Dispose();
-                            if (!timedOut) throw; // 非超时错误,直接失败
-                            if (attempt >= 2)
-                                throw new InvalidOperationException($"TIA Portal 启动连续 {attempt} 次超时,请检查许可证/服务状态: {ProjectOperations.Unwrap(ex).Message}");
-                            Console.Error.WriteLine("[warn] 等待 60 秒后重试(释放会话租约)...");
-                            System.Threading.Thread.Sleep(TimeSpan.FromSeconds(60));
-                        }
-                    }
-                }
+                Console.Error.WriteLine("[info] 检测到已运行的 TIA Portal,执行 Attach(用户场景)");
+                // Attach 一般几秒完成;兜底看门狗只退出进程,不杀用户 TIA
+                var attachWatchdog = new System.Threading.Timer(_ =>
+                {
+                    Console.Error.WriteLine("[warn] Attach 超时(120s),退出进程(不动用户 TIA)");
+                    Environment.Exit(3);
+                }, null, TimeSpan.FromSeconds(120), System.Threading.Timeout.InfiniteTimeSpan);
+                try { manager.Connect(TiaPortalMode.WithoutUserInterface); }
+                finally { attachWatchdog.Dispose(); }
 
                 Project project = null;
                 PlcSoftware plcSoftware = null;
@@ -200,6 +169,15 @@ namespace TiaOpennessWorker
                             .Property("attached", true)
                             .Property("projectName", "")
                             .Property("note", "博途窗口里没有打开的工程:请先手动打开工程,再点连接")
+                            .EndObject());
+                    }
+
+                    case "status":
+                    {
+                        return Ok(id, new JsonWriter().BeginObject()
+                            .Property("ready", true)
+                            .Property("attach", _attached)
+                            .Property("project", projectName)
                             .EndObject());
                     }
 
@@ -770,34 +748,6 @@ namespace TiaOpennessWorker
             if (project == null) return;
             try { project.Save(); Console.Error.WriteLine("[info] 工程已保存"); }
             catch (Exception ex) { Console.Error.WriteLine($"[warn] 保存失败(不影响内存内操作): {ProjectOperations.Unwrap(ex).Message}"); }
-        }
-
-        /// <summary>强杀所有 Siemens TIA 相关进程(serve 独占实例,不存在误杀用户进程的风险)。</summary>
-        private static void KillSiemensProcesses()
-        {
-            var names = new[]
-            {
-                "Siemens.Automation.Portal", "Siemens.Automation.ObjectServer",
-                "Siemens.Automation.Diagnostics", "Siemens.Automation.Tracing",
-                "Siemens.Automation.Help.V5",
-                "Siemens.Automation.ObjectFrame.FileStorage.Server",
-                "Siemens.Automation.SocketServer", "Siemens.Automation.ConnectionRuntime",
-            };
-            foreach (var name in names)
-            {
-                try
-                {
-                    foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
-                    {
-                        try
-                        {
-                            if (!p.HasExited) { p.Kill(); p.WaitForExit(15000); }
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
         }
 
         private static void RequireProject(Project project)

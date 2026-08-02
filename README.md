@@ -28,7 +28,7 @@
 Claude Code / 浏览器
    │  MCP 工具 / HTTP API
    ▼
-mcp_server.py / web_ui(自动 Attach 或启动 headless)
+mcp_server.py / web_ui(自动 Attach 到用户已开的博途)
    │  JSON 行协议(stdin/stdout)
    ▼
 TiaOpennessWorker.exe(serve 长驻,一次启动博途服务多请求)
@@ -100,8 +100,8 @@ TiaOpennessWorker.exe run --scl samples/GoodSample.scl --out output
   一个网络只能一条 Powerrail;O 盒 Card 模板值 Type="Cardinality";Add/Mul 必须显式 Card 而 Sub/Div 不能带
 - **SCL 中文**:源文件统一转 UTF-8 BOM 再导入,TIA 靠 BOM 识别编码,中文变量/中文注释直接可用
 - **SCL 规则**:一个 FB 实例只能调用一次(多条件用单次调用+布尔表达式);OB 的 TEMP 区不能放 FB 实例(用背景 DB)
-- **Attach vs Headless**:检测到已运行的博途 → Attach(写进用户界面正在看的工程,实时可见);
-  无实例 → 启动无界面实例;多实例用 `list-instances` / `attach-instance`
+- **只支持 Attach(必须可见)**:必须手动打开博途窗口,worker 附着进用户实例,写进界面正在看的工程、实时可见;
+  未开博途 → 明确报错"请先打开博途窗口",不启动无界面实例;多实例用 `list-instances` / `attach-instance`
 - **环境韧性**:启动前清理残留 Siemens 进程;150s 看门狗;超时自动重试(60s);WMI 故障/内存不足时 TIA 启动会静默挂起
 
 ## 目录结构

@@ -37,9 +37,10 @@ if os.path.exists(_cfg_path):
 mcp = FastMCP(
     "tia-openness",
     instructions=(
-        "TIA Portal Openness 工具集。如果用户已打开 TIA Portal(带界面),会自动 Attach 进用户实例,"
+        "TIA Portal Openness 工具集。要求用户已打开 TIA Portal(带界面),worker 自动 Attach 进用户实例,"
         "直接写进用户正在看的工程(界面实时可见,ready 时无需再 create_project/open_project,用 list_tag_tables 等直接操作)。"
-        "若工程没有 PLC 设备,先调用 add_cpu。无实例时自动启动无界面 TIA(首次调用约 30-90 秒)。"
+        "若用户还没开博途,工具调用会失败并提示'请先打开博途窗口'——必须让用户先打开博途,不再自动启动无界面实例。"
+        "若工程没有 PLC 设备,先调用 add_cpu。"
         "典型流程:add_tags → import_scl 或 generate_lad_block → compile_project。"
         "compile_project 返回 messages(含 block/description),AI 可据此修复 SCL 后重新 import_scl + compile_project。"
     ),
@@ -74,9 +75,15 @@ class TiaWorker:
         )
         line = self._proc.stdout.readline()
         if not line or b'"ready":true' not in line:
-            raise RuntimeError(
-                "worker 未就绪: " + line.decode("utf-8", "replace")[:200]
-            )
+            # 进程可能已退出(最常见:没开博途窗口)或启动失败:取 stderr 日志尾部找原因
+            reason = ""
+            try:
+                with open(WORKER_LOG, "rb") as f:
+                    reason = "".join(l.decode("utf-8", "replace") for l in f.readlines()[-4:])
+            except Exception:
+                pass
+            hint = (reason.strip()[:200] or "请先打开博途窗口再连接")
+            raise RuntimeError("worker 未就绪: " + hint)
 
     def call(self, cmd, args=None):
         with self._lock:

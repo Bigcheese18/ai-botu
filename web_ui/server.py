@@ -22,8 +22,6 @@ WORKER = TiaWorker()
 LOG_TAIL = []          # 最近日志行(worker 侧 stderr 由 TiaWorker 丢弃,这里只记前端操作)
 LOG_LOCK = threading.Lock()
 OUT_DIR = str(ROOT / "output")
-READY = {"attach": False, "project": None, "ready": False, "error": None, "outDir": OUT_DIR}
-
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
 
 
@@ -31,17 +29,6 @@ def log(msg: str):
     with LOG_LOCK:
         LOG_TAIL.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
         del LOG_TAIL[:-200]
-
-
-def init_status():
-    """启动时探测一次连接状态(worker 首次调用才会真正连接,这里做轻量探测)。"""
-    try:
-        # 用 list-projects 触发 worker 连接并感知 attach(attach 时工程自动绑定)
-        result = WORKER.call("list-projects")
-        READY["ready"] = True
-        READY["error"] = None
-    except Exception as ex:
-        READY["error"] = str(ex)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -61,7 +48,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, data, "text/html; charset=utf-8")
             return
         if self.path == "/api/status":
-            self._send(200, json.dumps(READY, ensure_ascii=False).encode("utf-8"))
+            # 实时查 worker 真实状态(worker 首次被调用时启动;未开博途时会失败并给出原因)
+            try:
+                st = WORKER.call("status")
+                st["outDir"] = OUT_DIR
+                self._send(200, json.dumps(st, ensure_ascii=False).encode("utf-8"))
+            except Exception as ex:
+                self._send(200, json.dumps({
+                    "ready": False, "attach": False, "project": None,
+                    "error": str(ex), "outDir": OUT_DIR,
+                }, ensure_ascii=False).encode("utf-8"))
             return
         if self.path == "/api/log":
             with LOG_LOCK:
@@ -150,7 +146,6 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    threading.Thread(target=init_status, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"TIA Web 面板: http://127.0.0.1:{port}")
     srv.serve_forever()
