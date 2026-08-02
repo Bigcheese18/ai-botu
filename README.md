@@ -76,27 +76,8 @@ python web_ui/server.py
 
 ![Web 面板](docs/web_panel.png)
 
-工程管理 / 变量表编辑 / 模板与 LAD 生成 / SCL 粘贴导入(中文注释可用)/ 编译诊断 / 实时日志,零依赖纯标准库。
-
-### AI 助手(浏览器里直接聊天控制博途)
-
-面板顶部的 **AI 助手** 用自然语言控制博途:AI(通义千问)自主决定调用工具
-(连接工程 / 加变量表 / 导 SCL / 编梯形图 / 编译诊断),工具执行过程以步骤条显示在聊天区。
-
-```jsonc
-// config.json(不入库):自由指定 provider / key / model
-{
-  "llm": {
-    "provider": "deepseek",            // deepseek | dashscope | openai
-    "api_key": "sk-...",
-    "model": "deepseek-chat"           // 省略则用 provider 默认
-  }
-}
-// key 回退:config.json → 环境变量(DEEPSEEK_API_KEY / DASHSCOPE_API_KEY)
-//          → 复用 ~/qwen-vision-mcp/.env 的 QWV_API_KEY(自动发现)
-```
-
-示例提问:"给我建一个电机启停自锁的梯形图块,再加 3 个中文变量"。
+工程管理(连接/断开/读取)/ 变量表编辑 / 编译诊断 / 实时日志,零依赖纯标准库。
+AI 写程序走 Claude Code + MCP(`mcp/mcp_server.py`),Web 面板专注手动操作。
 
 ### 直接命令行(调试)
 
