@@ -1,0 +1,197 @@
+FUNCTION_BLOCK "FB_MotorCtrl"
+VERSION : 0.1
+VAR_INPUT
+    b使能 : Bool;          // 轴使能
+    b正转命令 : Bool;      // 速度模式正转
+    b反转命令 : Bool;      // 速度模式反转
+    b定位命令 : Bool;      // 相对定位命令(上升沿触发)
+    b回零命令 : Bool;      // 回零点命令(上升沿触发)
+    b同步模式 : Bool;      // 齿轮同步模式(位置跟随外部目标)
+    r速度设定 : Real;      // 速度设定值(rpm)
+    r目标角度 : Real;      // 相对定位角度(度)
+    r同步目标 : Real;      // 同步模式目标位置(度)
+    b软限位使能 : Bool;    // 软限位启用
+    r软限位值 : Real;      // 软限位位置(度,正负对称)
+    r最大速度 : Real;      // 最大允许速度(rpm),超速钳位并报警
+    b外部模式 : Bool;      // 虚拟调试(MCD):位置/速度取外部反馈,NX 联调用
+    r外部位置 : Real;      // 外部位置反馈(度,来自 NX/MCD)
+    r外部速度 : Real;      // 外部速度反馈(rpm,来自 NX/MCD)
+END_VAR
+
+VAR_OUTPUT
+    q运行 : Bool := FALSE;          // 轴运行中
+    q到位 : Bool := FALSE;          // 定位完成
+    q回零完成 : Bool := FALSE;      // 回零完成
+    q报警 : Bool := FALSE;          // 有工艺报警
+    i报警号 : Int;         // 工艺报警号:1=软限位 2=超速
+    r位置 : Real := 0.0;          // 当前位置(度)
+    r速度 : Real := 0.0;          // 当前实际速度(rpm)
+END_VAR
+
+VAR
+    r位置积分 : Real;      // 位置模拟积分(接真实轴后改为外部反馈)
+    i状态 : Int;           // 0=空闲 1=使能 2=运行 3=定位 4=回零 5=同步
+    b定位请求 : Bool;      // 定位命令上升沿锁存
+    b回零请求 : Bool;      // 回零命令上升沿锁存
+    b定位执行 : Bool;      // 定位进行中
+    b回零执行 : Bool;      // 回零进行中
+    r定位目标 : Real;      // 定位目标位置(度)
+    b超速报警 : Bool;      // 超速报警锁存
+    b限位报警 : Bool;      // 软限位报警锁存
+    b停止输出 : Bool;      // 停止输出(回零完成/报警时)
+END_VAR
+
+BEGIN
+    // 输出参数默认值(先写后读,消除"可能未初始化"警告)
+    q到位 := FALSE;
+    q回零完成 := FALSE;
+    r速度 := 0.0;
+
+    // ========== 命令锁存(上升沿检测) ==========
+    // 注:定位命令可以是持续电平(系统级按钮保持),只在首次生效锁定目标
+    IF b定位命令 AND NOT b定位请求 THEN
+        b定位请求 := TRUE;
+        r定位目标 := r位置积分 + r目标角度;   // 立即锁定目标位置
+    END_IF;
+    IF b回零命令 THEN
+        b回零请求 := TRUE;
+    END_IF;
+    // 定位/回零完成后清除请求
+    IF q到位 THEN
+        b定位请求 := FALSE;
+    END_IF;
+    IF q回零完成 THEN
+        b回零请求 := FALSE;
+    END_IF;
+
+    // ========== 软限位检测 ==========
+    IF b软限位使能 AND (r位置积分 >= r软限位值 OR r位置积分 <= -r软限位值) THEN
+        b限位报警 := TRUE;
+        i报警号 := 1;
+    END_IF;
+    // 限位报警复位:回零命令或退出使能
+    IF b回零命令 OR NOT b使能 THEN
+        b限位报警 := FALSE;
+    END_IF;
+
+    // ========== 超速检测(钳位+报警) ==========
+    b超速报警 := b使能 AND r最大速度 > 0 AND ABS(r速度) > r最大速度;
+    IF b超速报警 THEN
+        i报警号 := 2;
+    END_IF;
+
+    // ========== 状态机 ==========
+    IF NOT b使能 THEN
+        // 未使能:全部复位
+        i状态 := 0;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+        b停止输出 := FALSE;
+        i报警号 := 0;
+    ELSIF b限位报警 THEN
+        // 软限位:停止运行
+        i状态 := 1;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+        b停止输出 := TRUE;
+    ELSIF b回零请求 THEN
+        // 回零:位置减到 0
+        i状态 := 4;
+        b回零执行 := TRUE;
+        b定位执行 := FALSE;
+    ELSIF b外部模式 THEN
+        // 虚拟调试(MCD):位置/速度由 NX 反馈,不执行本地运动逻辑
+        i状态 := 1;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+        r位置积分 := r外部位置;
+    ELSIF b同步模式 THEN
+        // 同步:位置跟随外部目标
+        i状态 := 5;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+        r位置积分 := r同步目标;
+    ELSIF b定位请求 THEN
+        // 相对定位:向 r定位目标 位置移动(目标在命令锁存时已计算)
+        i状态 := 3;
+        b定位执行 := TRUE;
+        b回零执行 := FALSE;
+        b定位请求 := FALSE;   // 目标已吸收
+    ELSIF b正转命令 OR b反转命令 THEN
+        // 速度模式
+        i状态 := 2;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+    ELSE
+        i状态 := 1;
+        b定位执行 := FALSE;
+        b回零执行 := FALSE;
+    END_IF;
+
+    // ========== 速度计算 ==========
+    IF i状态 = 2 THEN
+        // 速度模式:正转=设定值,反转=负值
+        r速度 := r速度设定;
+        IF b反转命令 THEN
+            r速度 := -r速度设定;
+        END_IF;
+    ELSIF i状态 = 3 AND b定位执行 THEN
+        // 定位:以设定速度向目标走
+        IF r位置积分 < r定位目标 THEN
+            r速度 := r速度设定;
+        ELSIF r位置积分 > r定位目标 THEN
+            r速度 := -r速度设定;
+        ELSE
+            r速度 := 0.0;
+        END_IF;
+    ELSIF i状态 = 4 THEN
+        // 回零:以设定速度反向走
+        r速度 := -r速度设定;
+    ELSIF i状态 = 5 THEN
+        // 同步:跟随目标速度(由外部给定,此处用设定值)
+        r速度 := r速度设定;
+    ELSE
+        r速度 := 0.0;
+    END_IF;
+
+    // 外部模式速度(NX 反馈)
+    IF b外部模式 THEN
+        r速度 := r外部速度;
+    END_IF;
+
+    // 超速钳位
+    IF b超速报警 AND r最大速度 > 0 THEN
+        IF r速度 > r最大速度 THEN r速度 := r最大速度; END_IF;
+        IF r速度 < -r最大速度 THEN r速度 := -r最大速度; END_IF;
+    END_IF;
+    // 软限位/停止输出时速度归零
+    IF b停止输出 THEN
+        r速度 := 0.0;
+    END_IF;
+
+    // ========== 位置积分(模拟,周期约 100ms) ==========
+    // 注:接真实轴/工艺对象后,位置应由编码器反馈写入,删除本积分
+    IF i状态 >= 2 AND NOT b外部模式 THEN
+        r位置积分 := r位置积分 + r速度 * 0.1 * 6.0 / 60.0;
+    END_IF;
+    r位置 := r位置积分;
+
+    // ========== 到位/回零完成判断 ==========
+    q到位 := b定位执行 AND ABS(r位置积分 - r定位目标) < 0.5;
+    IF q到位 THEN
+        b定位执行 := FALSE;
+        i状态 := 1;
+    END_IF;
+    q回零完成 := b回零执行 AND ABS(r位置积分) < 0.5;
+    IF q回零完成 THEN
+        b回零执行 := FALSE;
+        i状态 := 1;
+    END_IF;
+
+    // ========== 输出 ==========
+    q运行 := i状态 >= 2 AND NOT b停止输出;
+    q报警 := b限位报警 OR b超速报警;
+    IF q报警 THEN
+        r速度 := 0.0;
+    END_IF;
+END_FUNCTION_BLOCK

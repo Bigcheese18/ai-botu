@@ -1,0 +1,20 @@
+ORGANIZATION_BLOCK "Main"
+VERSION : 0.1
+VAR_TEMP
+    iT1 : Int;   // OB 接口最小 20 字节
+    iT2 : Int;
+    iT3 : Int;
+    iT4 : Int;
+    iT5 : Int;
+    iT6 : Int;
+    iT7 : Int;
+    rT1 : Real;
+    rT2 : Real;
+END_VAR
+BEGIN
+    // =============================================================
+    // 主循环(OB1):调用 CMIC 圆盘同步控制系统
+    // 按钮 A-F / DI1 / DI2 / MCD 变量的接线见 FC_CMIC控制
+    // =============================================================
+    "FC_CMIC控制"();
+END_ORGANIZATION_BLOCK
