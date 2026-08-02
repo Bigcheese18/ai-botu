@@ -116,7 +116,57 @@ String 带长度前缀(`STRING[N]` 实际可用 N-1 字符,len 由系统维护,�
   - 同步/捕捉/比较输出 → `CTRL_HSC_EXT`(V4.2+ 固件)。
 - 当前计数值不在 CTRL_HSC 输出里,直接读组态分配的过程映像地址。
 
-## 10. 与实测经验的交叉规则(写程序必查)
+## 10. 运动控制(Motion Control,PLCopen 标准)
+
+MC 指令均为功能块,作用于**轴工艺对象**(TO_Axis/TO_SpeedAxis/TO_PositioningAxis)。前提与铁律:
+- ⚠ **必须先 MC_Power 使能轴**(Enable=TRUE 且 Status=TRUE)才能执行任何运动作业。
+- ⚠ 指令必须在 OB 中**循环调用**,状态通过输出参数更新。
+- ⚠ 输入参数在 **Execute 上升沿锁存传送**(除 MC_Power 的 StopMode、MC_MoveJog 的 Velocity 随时生效)。
+- 上电/CPU STOP 后运动作业全部中止,必须重新使能。
+
+| 指令 | 功能 | 关键参数 |
+|---|---|---|
+| MC_Power | 轴使能(最先调用) | Enable, EnablePositive/Negative, bRegulatorOn → Status/Busy/ErrorID |
+| MC_Home | 回零(7 种模式) | Execute, Position, Mode → Done |
+| MC_MoveAbsolute | 绝对定位 | Execute, Position, Velocity, Acc/Dec, Jerk(0=无S曲线), BufferMode |
+| MC_MoveRelative | 相对定位(可负) | Execute, Distance, Velocity, Acc/Dec |
+| MC_MoveVelocity | 定速连续运动 | Execute, Velocity → InVelocity |
+| MC_MoveJog | 点动 | JogForward/JogBackward, Velocity |
+| MC_Halt | 减速停止(保持使能) | Execute, Deceleration |
+| MC_Stop | 急停(立即或减速) | Execute, StopMode |
+| MC_Reset | 错误复位 | Execute → 成功后 StatusBits.Error=FALSE |
+
+**回零 7 种模式(Mode)**:0=直接设当前值为 Position(绝对式调零) / 1=主动寻零脉冲 / 2=被动寻零 / 3=限位+零脉冲(常用) / 4=参考点开关 / 5=绝对值编码器直接读 / 6=探针。
+⚠ **回零完成前不能启动绝对定位**(需 StatusBits.HomingDone=TRUE)。
+
+**PLCopen 状态机**:Disabled →(MC_Power)→ Standstill →(MC_Home)→ Homing →(定位/定速)→ Discrete/Continuous Motion →(MC_Halt/Stop)→ Stopping → Standstill;任何错误 → ErrorStop →(MC_Reset)→ Standstill。
+- Done 至少保持一个周期(Execute 保持则锁存);新命令会中止旧命令并输出 CommandAborted=TRUE(覆盖/超驰)。
+- 逐步命令:等前一个 Done/StatusBits 再发下一个,否则报轴错误。
+- 常见错误码:16#80A1 驱动未就绪 / 16#80A3 通信故障。
+
+**标准流程**:MC_Power 使能 → MC_Reset 清错 → MC_Home 回零(等 Done)→ 按工艺依次 MC_MoveAbsolute/MoveRelative/MoveVelocity(每步等 Done)→ MC_Halt 停 → 断使能。
+
+## 11. 同步控制(仅 S7-1500T,同步轴 TO_SynchronousAxis)
+
+同步轴可建立两种主从关系:**线性关系**(齿轮比)与**函数关系**(凸轮表)。同步轴未同步时可当定位轴用。
+
+| 指令 | 功能 | 关键参数 |
+|---|---|---|
+| MC_GearIn | 相对齿轮同步 | RatioNumerator(从)/RatioDenominator(主), Acc/Dec → InGear |
+| MC_GearInPos | 绝对齿轮同步(仅1500T) | MasterSyncPosition/SlaveSyncPosition → InSync |
+| MC_CamIn | 电子凸轮同步(仅1500T) | CamTableID, MasterOffset/SlaveOffset, Scaling, StartMode → InCam |
+| MC_PhasingAbsolute/Relative | 同步中动态移相(仅1500T) | PhaseShift, Acc/Dec → Done |
+| MC_GearOut / MC_CamOut | 解除同步 | Slave, Execute → Done |
+
+**规则**:
+- 主轴必须先处于运动状态(Continuous/Discrete Motion),从轴 Standstill 且已使能。
+- 齿轮比注意从轴不超速;3:2 → RatioNumerator:=3.0, RatioDenominator:=2.0。
+- 同步建立方式:提前同步(动态参数)/ 随后同步(主值距离)。
+- MC_Phasing 必须在 GearIn/CamIn 激活后调用,用于套位调整等。
+- 同步失败查 ErrorID(主轴丢失/从轴超限)→ MC_Reset 恢复。
+- **CIMC 模板衔接**:`samples/FB_MotorCtrl.scl` 是上述指令的软件模拟(状态机 + 位置积分模拟),接真实轴时把对应状态替换为 MC_Power/MC_Home/MC_MoveVelocity/MC_MoveAbsolute/MC_GearIn 调用;S7-1500T 之外的 CPU 只能软件同步(手写比例跟随逻辑)。
+
+## 12. 与实测经验的交叉规则(写程序必查)
 
 1. ⚠ 定时器每次调用带 PT(含复位式)。
 2. ⚠ 输出参数禁"先读后写" → 静态缓存 + 输出映射;条件分支先读后写同样警告 → 增量变量 + 无条件累加。
