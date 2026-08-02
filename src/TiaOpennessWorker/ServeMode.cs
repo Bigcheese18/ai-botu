@@ -208,15 +208,16 @@ namespace TiaOpennessWorker
 
                     case "close-project":
                     {
-                        // 断开是幂等操作:没有打开的工程时也算断开成功
+                        // 断开 = 解除 worker 与工程的绑定,绝不关闭用户窗口里打开的工程
+                        // (attach 模式下 project.Close() 会直接关掉用户界面里的工程,不能调用)
                         if (project == null)
                             return Ok(id, new JsonWriter().BeginObject()
                                 .Property("closed", false)
                                 .Property("note", "当前没有打开的工程(已断开)")
                                 .EndObject());
-                        project.Close();
                         project = null;
                         plcSoftware = null;
+                        projectName = "";
                         return Ok(id, new JsonWriter().BeginObject()
                             .Property("closed", true)
                             .EndObject());
