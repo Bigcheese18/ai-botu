@@ -166,7 +166,28 @@ MC 指令均为功能块,作用于**轴工艺对象**(TO_Axis/TO_SpeedAxis/TO_Po
 - 同步失败查 ErrorID(主轴丢失/从轴超限)→ MC_Reset 恢复。
 - **CIMC 模板衔接**:`samples/FB_MotorCtrl.scl` 是上述指令的软件模拟(状态机 + 位置积分模拟),接真实轴时把对应状态替换为 MC_Power/MC_Home/MC_MoveVelocity/MC_MoveAbsolute/MC_GearIn 调用;S7-1500T 之外的 CPU 只能软件同步(手写比例跟随逻辑)。
 
-## 12. 选件包与软件版本(决定哪些功能能用)
+## 12. 指令选件包(指令面板"工艺"文件夹)
+
+TIA 指令面板的 **"工艺"(Technology)文件夹**下按 CPU 分组:S7-1200 Motion Control / S7-1500 Motion Control。运动控制指令按**技术版本**提供(版本由 CPU 固件决定,指令列表随固件切换)。
+
+**Motion Control 技术版本演进**:
+
+| 版本 | CPU 固件 | 技术对象(TO)与新增能力 |
+|---|---|---|
+| V1.0 | V1.0–V1.5 | 速度轴/定位轴/外部编码器 |
+| V2.0 | V1.6–V1.8 | +**同步轴**、MC_GearIn、MC_MoveSuperimposed(叠加定位);⚠ **MC_Home 的 Mode 参数值含义变化**(如 V1.0 的被动回零值 3 在 V2.0+ 变主动回零) |
+| V3.0 | V2.0–V2.1 | +测量探头/凸轮/凸轮轨迹/**虚拟轴**、力/力矩限制、固定挡块检测、MC-PreServo[OB67]/MC-PostServo[OB95];**首次引入 S7-1500T**:MC_GearInPos、MC_CamIn、MC_PhasingAbsolute/Relative、MC_SetSensor、MC_OutputCam、MC_CamTrack、MC_MeasuringInput 等 |
+| V4.0 | 新固件 | +力矩数据交换(附加设定/实际力矩/力矩范围)、**运动学(仅1500T)**、MotionIn 指令(MC_MotionInVelocity/Position)、MC_GroupInterrupt/Continue/Stop、MC_MoveLinear/CircularAbsolute/Relative、MC_DefineTool/MC_SetTool、MC_DefineWorkspaceZone 等 |
+
+⚠ **版本切换坑**:技术版本 <V4.0 与 ≥V4.0 之间切换时 SIEMENS 报文 UDT 名称变化(PD_STW1 → PD_STW1_611Umode),切换后编译报错需手动改 UDT 名。
+⚠ 运动控制指令**各自独立背景 DB,不能共用**;V4 起兼容 PLCopen 2.0。
+
+**Easy Motion Control**(简化选件包):提供 _Easy 系列简化指令(MC_Power_Easy 等),参数少、上手快,适合简单定位应用;细节以官方手册为准。
+
+**补充指令**:MC_CommandTable(命令表顺序执行)、MC_ChangeDynamic(在线改动态)、MC_ReadParam/MC_WriteParam(读写轴参数)、MC_SetSensor(换编码器源)。
+**行为要点**:MC_MoveVelocity 的 Velocity=0 等价 MC_Halt(按组态减速度停止);各运动指令互有**超驰**关系(新命令中止旧命令,旧命令输出 CommandAborted)。
+
+## 13. 安装选件包与软件版本(决定哪些功能能用)
 
 **CPU 四类**:标准型(Standard)/ 故障安全型(F)/ 技术型(T,运动控制+技术对象)/ 技术+故障安全型(TF)。同步控制等高级运动功能仅 T/TF CPU。
 
@@ -194,7 +215,7 @@ MC 指令均为功能块,作用于**轴工艺对象**(TO_Axis/TO_SpeedAxis/TO_Po
 
 **安装与版本**:推荐顺序 STEP 7 → PLCSIM → WinCC → Startdrive → Safety;⚠ 所有模块必须同版本(含 SP/Update),否则无法启动;V15 起 STEP 7 与 WinCC 集成安装;选件包与 CPU 固件版本需匹配(如 HSC 的 CTRL_HSC_EXT 需 V4.2+ 固件)。
 
-## 13. 与实测经验的交叉规则(写程序必查)
+## 14. 与实测经验的交叉规则(写程序必查)
 
 1. ⚠ 定时器每次调用带 PT(含复位式)。
 2. ⚠ 输出参数禁"先读后写" → 静态缓存 + 输出映射;条件分支先读后写同样警告 → 增量变量 + 无条件累加。
