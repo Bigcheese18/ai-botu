@@ -77,7 +77,6 @@
       <button class="primary" onclick="connectProject()">连接工程</button>
       <button onclick="cmd('close-project',{})">断开工程</button>
       <button onclick="cmd('read-project',{outDir:OUT_DIR+'/export'})">读取工程</button>
-      <button onclick="cmd('save-project',{})">保存</button>
     </div>
   </div>
 
@@ -171,7 +170,7 @@ async function refreshStatus() {
       bar.textContent = '未连接';
       bar.title = s.error || '';
     } else {
-      bar.textContent = s.project ? '已连接: ' + s.project : '已连接(无工程)';
+      bar.textContent = s.project ? '已连接: ' + s.project : '已连接·未绑定工程';
       bar.title = '';
     }
     bar.className = 'status ' + (s.ready ? 'st-ok' : 'st-off');
