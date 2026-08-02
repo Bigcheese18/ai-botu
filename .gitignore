@@ -22,3 +22,4 @@ __pycache__/
 
 # 本地配置
 *.local.json
+config.json

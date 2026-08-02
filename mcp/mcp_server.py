@@ -25,6 +25,15 @@ WORKER_EXE = os.path.join(_ROOT, "src", "TiaOpennessWorker", "bin", "Debug", "ne
 OUT_DIR = os.path.join(_ROOT, "output")
 WORKER_LOG = os.path.join(OUT_DIR, "mcp_worker.log")
 
+# 本地配置(不入库):非标准安装时设 openness_dir 指向 PublicAPI/V21/net48
+_CONFIG = {}
+_cfg_path = os.path.join(_ROOT, "config.json")
+if os.path.exists(_cfg_path):
+    try:
+        _CONFIG = json.load(open(_cfg_path, encoding="utf-8"))
+    except Exception:
+        _CONFIG = {}
+
 mcp = FastMCP(
     "tia-openness",
     instructions=(
@@ -51,12 +60,17 @@ class TiaWorker:
             return
         os.makedirs(os.path.dirname(WORKER_LOG), exist_ok=True)
         err_file = open(WORKER_LOG, "ab")
+        env = dict(os.environ)
+        openness = _CONFIG.get("openness_dir") or os.environ.get("TIA_OPENNESS_DIR")
+        if openness:
+            env["TIA_OPENNESS_DIR"] = openness
         self._proc = subprocess.Popen(
             [self.exe, "serve"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=err_file,
             cwd=os.path.dirname(self.exe),
+            env=env,
         )
         line = self._proc.stdout.readline()
         if not line or b'"ready":true' not in line:
